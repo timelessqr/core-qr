@@ -1,6 +1,9 @@
 // ====================================
 // src/models/Media.js
 // ====================================
+const mongoose = require('mongoose');
+const { SECCIONES_DISPONIBLES } = require('../utils/constants');
+
 const mediaSchema = new mongoose.Schema({
   perfil: {
     type: mongoose.Schema.Types.ObjectId,
@@ -14,7 +17,9 @@ const mediaSchema = new mongoose.Schema({
   },
   seccion: {
     type: String,
-    enum: SECCIONES_DISPONIBLES.filter(s => ['galeria_fotos', 'videos_memoriales', 'cronologia', 'testimonios', 'logros', 'hobbies'].includes(s)),
+    enum: SECCIONES_DISPONIBLES.filter(s => 
+      ['galeria_fotos', 'videos_memoriales', 'cronologia', 'testimonios', 'logros', 'hobbies'].includes(s)
+    ),
     required: [true, 'La sección es requerida']
   },
   
@@ -110,10 +115,23 @@ mediaSchema.index({ uploadedBy: 1 });
 // Método para obtener URL de thumbnail (para videos)
 mediaSchema.methods.getThumbnailUrl = function() {
   if (this.tipo === 'video' && this.archivo.url) {
-    // Generar URL de thumbnail (implementar según estrategia de almacenamiento)
-    return this.archivo.url.replace('.mp4', '_thumb.jpg');
+    // Generar URL de thumbnail basada en el ID del media
+    const mediaDir = `/uploads/media/${this._id}`;
+    return `${mediaDir}/${this._id}_thumb.jpg`;
   }
   return this.archivo.url;
 };
+
+// Método virtual para obtener URL completa
+mediaSchema.virtual('fullUrl').get(function() {
+  if (this.archivo.url.startsWith('http')) {
+    return this.archivo.url;
+  }
+  return `${process.env.FRONTEND_URL || 'http://localhost:3000'}${this.archivo.url}`;
+});
+
+// Incluir virtuals en JSON
+mediaSchema.set('toJSON', { virtuals: true });
+mediaSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('Media', mediaSchema);

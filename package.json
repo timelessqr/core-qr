@@ -7,11 +7,24 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node run-all-tests.js",
+    "test:unit": "jest tests/unit --verbose",
+    "test:integration": "jest tests/integration --verbose --detectOpenHandles",
+    "test:auth": "jest tests/integration/auth.test.js --verbose",
+    "test:profiles": "jest tests/integration/profiles.test.js --verbose",
+    "test:qr": "jest tests/integration/qr.test.js --verbose",
+    "test:dashboard": "jest tests/integration/dashboard.test.js --verbose",
+    "test:media": "jest tests/integration/media.test.js --verbose",
+    "test:storage": "jest tests/integration/storage.test.js --verbose",
+    "test:watch": "jest --watch --verbose",
+    "test:coverage": "jest --coverage",
+    "test:silent": "jest --silent",
+    "verify": "node project-verification.js",
+    "check": "node project-verification.js",
     "start": "node server.js",
     "dev": "nodemon server.js",
     "lint": "eslint src/",
-    "test:watch": "jest --watch"
+    "lint:fix": "eslint src/ --fix"
   },
   "keywords": [],
   "author": "",
