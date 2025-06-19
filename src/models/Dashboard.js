@@ -27,8 +27,11 @@ const dashboardSchema = new mongoose.Schema({
       min: 0
     },
     configuracion: {
-      tipo: String, // 'grid', 'carousel', 'list', 'timeline'
-      default: 'grid',
+      tipo: {
+        type: String,
+        enum: ['grid', 'carousel', 'list', 'timeline'],
+        default: 'grid'
+      },
       columnas: {
         type: Number,
         default: 3,

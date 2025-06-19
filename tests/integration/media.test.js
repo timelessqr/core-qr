@@ -63,7 +63,7 @@ describe('📷 Media Module Integration Tests', () => {
       .set('Authorization', `Bearer ${authToken}`)
       .send(profileData);
 
-    testProfile = profileResponse.body.data.profile;
+    testProfile = profileResponse.body.data;
   });
 
   describe('GET /api/media/storage/info', () => {
@@ -359,7 +359,7 @@ describe('📷 Media Module Integration Tests', () => {
         .send(profile2Data);
 
       // Subir archivos a ambos perfiles
-      const profiles = [testProfile.id, profile2Response.body.data.profile.id];
+      const profiles = [testProfile.id, profile2Response.body.data.id];
       
       for (const profileId of profiles) {
         const testBuffer = Buffer.from(`test for ${profileId}`);

@@ -1,0 +1,69 @@
+{
+  "timestamp": "2025-06-19T16:35:50.817Z",
+  "project": "Lazos de Vida Backend",
+  "verification": {
+    "modules": {
+      "structure": {
+        "score": 17,
+        "maxScore": 17,
+        "percentage": "100.0"
+      },
+      "auth": {
+        "score": 4,
+        "maxScore": 4,
+        "percentage": "100.0"
+      },
+      "profiles": {
+        "score": 4,
+        "maxScore": 4,
+        "percentage": "100.0"
+      },
+      "qr": {
+        "score": 4,
+        "maxScore": 4,
+        "percentage": "100.0"
+      },
+      "media": {
+        "score": 6,
+        "maxScore": 6,
+        "percentage": "100.0"
+      },
+      "dashboard": {
+        "score": 5,
+        "maxScore": 5,
+        "percentage": "100.0"
+      },
+      "storage": {
+        "score": 4,
+        "maxScore": 4,
+        "percentage": "100.0"
+      },
+      "dependencies": {
+        "score": 20,
+        "maxScore": 20,
+        "percentage": "100.0"
+      },
+      "configuration": {
+        "score": 3,
+        "maxScore": 3,
+        "percentage": "100.0"
+      },
+      "documentation": {
+        "score": 5,
+        "maxScore": 5,
+        "percentage": "100.0"
+      },
+      "testing": {
+        "score": 10,
+        "maxScore": 10,
+        "percentage": "100.0"
+      }
+    },
+    "overall": {
+      "score": 82,
+      "maxScore": 82,
+      "percentage": "100.0",
+      "status": "🎉 excelente"
+    }
+  }
+}

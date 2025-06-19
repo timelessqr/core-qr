@@ -2,13 +2,19 @@
 // src/services/storage/storageService.js
 // ====================================
 const localStorageService = require('./localStorageService');
-const r2StorageService = require('./r2StorageService');
 
 class StorageService {
   constructor() {
     // Determinar qué servicio de storage usar basado en la configuración
     this.useR2 = this.shouldUseR2();
-    this.storageProvider = this.useR2 ? r2StorageService : localStorageService;
+    
+    // Solo importar R2StorageService si está configurado
+    if (this.useR2) {
+      const r2StorageService = require('./r2StorageService');
+      this.storageProvider = r2StorageService;
+    } else {
+      this.storageProvider = localStorageService;
+    }
     
     console.log(`📦 Storage configurado: ${this.useR2 ? 'Cloudflare R2' : 'Local'}`);
   }
