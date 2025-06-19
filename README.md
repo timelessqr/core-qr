@@ -49,23 +49,170 @@ core-qr/
 
 ## 🔐 API Endpoints
 
-### Autenticación
-- `POST /api/auth/register` - Registro de usuarios
-- `POST /api/auth/login` - Inicio de sesión
-- `GET /api/auth/profile` - Perfil del usuario autenticado
+**Base URL:** `http://localhost:3000`
 
-### Perfiles/Memoriales
-- `POST /api/profiles` - Crear memorial (auto-genera QR)
-- `GET /api/profiles/my-profiles` - Listar mis memoriales
-- `GET /api/profiles/:id` - Obtener memorial específico
-- `PUT /api/profiles/:id` - Actualizar memorial
-- `DELETE /api/profiles/:id` - Eliminar memorial
+### 🔑 Autenticación
 
-### Códigos QR
-- `POST /api/qr/generate/:profileId` - Generar QR para perfil
-- `GET /api/qr/my-qrs` - Listar mis códigos QR
-- `GET /api/qr/:code/stats` - Estadísticas del QR
-- `GET /api/memorial/:qrCode` - **Acceso público al memorial**
+#### Registro de Usuario
+```http
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "Demo User",
+  "email": "demo@coreqr.com",
+  "password": "demo123456",
+  "plan": "basico"
+}
+```
+
+**Respuesta:**
+```json
+{
+  "success": true,
+  "message": "Usuario registrado exitosamente",
+  "data": {
+    "user": { "id": "...", "nombre": "...", "email": "...", "plan": "basico" },
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "planLimits": { "fotos": 50, "videos": 10, "almacenamiento": 524288000 }
+  }
+}
+```
+
+#### Login
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "demo@coreqr.com",
+  "password": "demo123456"
+}
+```
+
+**Respuesta:**
+```json
+{
+  "success": true,
+  "message": "Login exitoso",
+  "data": {
+    "user": { "id": "...", "nombre": "...", "email": "..." },
+    "token": "eyJhbGciOiJIUzI1NiIs..."
+  }
+}
+```
+
+#### Perfil del Usuario
+```http
+GET /api/auth/profile
+Authorization: Bearer {token}
+```
+
+### 👤 Memoriales
+
+#### Crear Memorial (Auto-genera QR)
+```http
+POST /api/profiles
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "nombre": "Carlos Eduardo Pérez",
+  "fechaNacimiento": "1950-03-15",
+  "fechaFallecimiento": "2024-11-20",
+  "biografia": "Un hombre excepcional...",
+  "lugarNacimiento": "Buenos Aires, Argentina",
+  "lugarFallecimiento": "Buenos Aires, Argentina",
+  "secciones": [
+    {
+      "titulo": "Vida Familiar",
+      "contenido": "Esposo devoto por 45 años..."
+    }
+  ]
+}
+```
+
+**Respuesta:**
+```json
+{
+  "success": true,
+  "message": "Perfil creado exitosamente",
+  "data": {
+    "nombre": "Carlos Eduardo Pérez",
+    "qr": "3A3D2FF375A9",
+    "url": "http://localhost:3000/memorial/3A3D2FF375A9",
+    "edadAlFallecer": 74,
+    "isPublic": true
+  }
+}
+```
+
+#### Listar Mis Memoriales
+```http
+GET /api/profiles/my-profiles
+Authorization: Bearer {token}
+```
+
+### 📱 Códigos QR
+
+#### Listar Mis QRs
+```http
+GET /api/qr/my-qrs
+Authorization: Bearer {token}
+```
+
+**Respuesta:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "code": "3A3D2FF375A9",
+      "url": "http://localhost:3000/memorial/3A3D2FF375A9",
+      "tipo": "profile",
+      "estadisticas": {
+        "vistas": 0,
+        "escaneos": 0
+      }
+    }
+  ]
+}
+```
+
+#### Estadísticas del QR
+```http
+GET /api/qr/{code}/stats
+Authorization: Bearer {token}
+```
+
+### 🌍 Acceso Público (SIN Autenticación)
+
+#### Memorial Público
+```http
+GET /api/memorial/{qrCode}
+```
+
+**Ejemplo:** `GET /api/memorial/3A3D2FF375A9`
+
+**Respuesta:**
+```json
+{
+  "success": true,
+  "data": {
+    "memorial": {
+      "nombre": "Carlos Eduardo Pérez",
+      "biografia": "Un hombre excepcional...",
+      "edadAlFallecer": 74,
+      "qr": {
+        "code": "3A3D2FF375A9",
+        "vistas": 1,
+        "escaneos": 1
+      }
+    },
+    "visitRegistered": true
+  }
+}
+```
 
 ## 💰 Planes de Servicio
 
@@ -116,6 +263,115 @@ MONGODB_URI=mongodb://localhost:27017/core_qr
 JWT_SECRET=tu_jwt_secret_aqui
 NODE_ENV=development
 ```
+
+## 💻 **Para Desarrolladores Frontend**
+
+### 🔗 **Conectar con la API**
+
+**Base URL del servidor:** `http://localhost:3000`
+
+**Headers requeridos para endpoints autenticados:**
+```javascript
+{
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${token}`
+}
+```
+
+### 📋 **Flujo de autenticación:**
+
+1. **Registro/Login** → Obtener `token`
+2. **Guardar token** en localStorage/sessionStorage
+3. **Incluir token** en headers para requests autenticadas
+4. **Manejar token expirado** (renovar login)
+
+### 🔧 **Ejemplo con Fetch:**
+
+```javascript
+// Login
+const loginUser = async (email, password) => {
+  const response = await fetch('http://localhost:3000/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await response.json();
+  if (data.success) {
+    localStorage.setItem('token', data.data.token);
+  }
+  return data;
+};
+
+// Crear Memorial
+const createMemorial = async (memorialData) => {
+  const token = localStorage.getItem('token');
+  const response = await fetch('http://localhost:3000/api/profiles', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(memorialData)
+  });
+  return response.json();
+};
+
+// Acceso Público (sin token)
+const getPublicMemorial = async (qrCode) => {
+  const response = await fetch(`http://localhost:3000/api/memorial/${qrCode}`);
+  return response.json();
+};
+```
+
+### 🔧 **Ejemplo con Axios:**
+
+```javascript
+import axios from 'axios';
+
+// Configurar base URL
+const api = axios.create({
+  baseURL: 'http://localhost:3000/api'
+});
+
+// Interceptor para agregar token automáticamente
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Uso
+const createMemorial = async (data) => {
+  const response = await api.post('/profiles', data);
+  return response.data;
+};
+```
+
+### ⚠️ **Manejo de Errores:**
+
+```javascript
+// Códigos de respuesta comunes
+// 200: Éxito
+// 401: No autorizado (token inválido/expirado)
+// 400: Error de validación
+// 404: Recurso no encontrado
+// 500: Error del servidor
+
+const handleApiError = (error) => {
+  if (error.response?.status === 401) {
+    // Token expirado, redirigir a login
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+  }
+  return error.response?.data || { message: 'Error de conexión' };
+};
+```
+
+### 📱 **CORS Configuration**
+
+El servidor ya tiene CORS configurado para desarrollo. Para producción, actualizar las URLs permitidas en el backend.
 
 ## 🧪 Pruebas
 

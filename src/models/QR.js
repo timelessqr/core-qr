@@ -90,7 +90,7 @@ const qrSchema = new mongoose.Schema({
 });
 
 // Índices
-qrSchema.index({ code: 1 });
+// Code ya tiene índice único automático por unique: true
 qrSchema.index({ referenciaId: 1, tipo: 1 });
 qrSchema.index({ creadoPor: 1 });
 qrSchema.index({ isActive: 1 });

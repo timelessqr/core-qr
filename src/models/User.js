@@ -50,7 +50,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Índices
-userSchema.index({ email: 1 });
+// Email ya tiene índice único automático por unique: true
 userSchema.index({ isActive: 1 });
 
 // Hash password antes de guardar
