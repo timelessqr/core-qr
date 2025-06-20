@@ -71,6 +71,12 @@ class QRRepository {
     );
   }
   
+  // 🗑️ NUEVO: Eliminación completa (hard delete)
+  async hardDelete(id) {
+    console.log('🗑️ Ejecutando hard delete de QR:', id);
+    return await QR.findByIdAndDelete(id);
+  }
+  
   async getStats(code) {
     const qr = await QR.findOne({ code }).select('estadisticas code tipo');
     if (!qr) {

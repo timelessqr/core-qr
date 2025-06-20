@@ -69,8 +69,8 @@ module.exports = {
 
   // 🌐 URLs
   URLS: {
-    FRONTEND: process.env.FRONTEND_URL || 'http://localhost:3000',
-    QR_BASE: process.env.QR_BASE_URL || 'http://localhost:3000/memorial'
+    FRONTEND: process.env.FRONTEND_URL || 'http://localhost:5173',
+    QR_BASE: process.env.QR_BASE_URL || 'http://192.168.1.34:5173/memorial'
   },
 
   // 📊 ESTADOS DE PROCESAMIENTO

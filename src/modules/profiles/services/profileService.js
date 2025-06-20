@@ -150,13 +150,53 @@ class ProfileService {
         throw new Error(MESSAGES.ERROR.PROFILE_NOT_FOUND);
       }
       
-      // Desactivar perfil
-      await profileRepository.delete(profileId);
+      console.log('🗑️ Eliminando memorial y registros asociados:', profileId);
       
-      // TODO: También desactivar QR asociado
+      // 1. Eliminar QR asociado si existe
+      if (profile.qr) {
+        try {
+          const qrRepository = require('../../qr/repositories/qrRepository');
+          await qrRepository.hardDelete(profile.qr._id || profile.qr);
+          console.log('✅ QR eliminado:', profile.qr._id || profile.qr);
+        } catch (qrError) {
+          console.warn('⚠️ Error eliminando QR:', qrError.message);
+        }
+      }
       
-      return { message: 'Memorial eliminado exitosamente' };
+      // 2. Eliminar dashboard asociado si existe
+      try {
+        const dashboardRepository = require('../../dashboard/repositories/dashboardRepository');
+        await dashboardRepository.deleteByProfileId(profileId);
+        console.log('✅ Dashboard eliminado para profile:', profileId);
+      } catch (dashboardError) {
+        console.warn('⚠️ Error eliminando dashboard:', dashboardError.message);
+      }
+      
+      // 3. Eliminar comentarios asociados si existen
+      try {
+        const Comentario = require('../../../models/Comentario');
+        await Comentario.deleteMany({ memorial: profileId });
+        console.log('✅ Comentarios eliminados para profile:', profileId);
+      } catch (commentError) {
+        console.warn('⚠️ Error eliminando comentarios:', commentError.message);
+      }
+      
+      // 4. Eliminar media asociada si existe
+      try {
+        const Media = require('../../../models/Media');
+        await Media.deleteMany({ profile: profileId });
+        console.log('✅ Media eliminada para profile:', profileId);
+      } catch (mediaError) {
+        console.warn('⚠️ Error eliminando media:', mediaError.message);
+      }
+      
+      // 5. Finalmente, eliminar el perfil completamente
+      await profileRepository.hardDelete(profileId);
+      console.log('✅ Memorial eliminado completamente:', profileId);
+      
+      return { message: 'Memorial y todos sus datos asociados eliminados exitosamente' };
     } catch (error) {
+      console.error('❌ Error en delete completo:', error);
       throw error;
     }
   }

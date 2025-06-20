@@ -38,8 +38,16 @@ class QRService {
       // Generar código único
       const code = await this.generateUniqueCode();
       
+      // 🚨 DEBUG: Ver qué URL se está generando
+      console.log('=== DEBUG QR GENERATION ===');
+      console.log('URLS.QR_BASE desde constants:', URLS.QR_BASE);
+      console.log('process.env.QR_BASE_URL:', process.env.QR_BASE_URL);
+      console.log('Código generado:', code);
+      
       // Crear URL del memorial
       const url = `${URLS.QR_BASE}/${code}`;
+      console.log('URL final generada:', url);
+      console.log('=========================');
       
       // Crear QR en base de datos
       const qrData = {

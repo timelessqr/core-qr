@@ -2,6 +2,12 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+// 🚨 DEBUG: Verificar que las variables se están leyendo correctamente
+console.log('=== DEBUG VARIABLES DE ENTORNO ===');
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+console.log('QR_BASE_URL:', process.env.QR_BASE_URL);
+console.log('===============================');
+
 // Importar configuraciones
 const connectDB = require('./src/config/database');
 
@@ -14,7 +20,11 @@ connectDB().catch(err => {
 
 // Middlewares básicos
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: [
+    'http://localhost:5173',      // Para desarrollo local
+    'http://192.168.1.34:5173',   // Para acceso desde red local (móvil)
+    process.env.FRONTEND_URL      // URL del .env como backup
+  ].filter(Boolean), // Filtrar valores undefined
   credentials: true
 }));
 
@@ -82,7 +92,7 @@ app.use('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
   console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📡 URL: http://localhost:${PORT}`);

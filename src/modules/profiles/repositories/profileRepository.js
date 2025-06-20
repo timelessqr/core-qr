@@ -105,6 +105,12 @@ class ProfileRepository {
     );
   }
   
+  // 🗑️ NUEVO: Eliminación completa (hard delete)
+  async hardDelete(id) {
+    console.log('🗑️ Ejecutando hard delete de profile:', id);
+    return await Profile.findByIdAndDelete(id);
+  }
+  
   async linkQR(profileId, qrId) {
     return await Profile.findByIdAndUpdate(
       profileId,

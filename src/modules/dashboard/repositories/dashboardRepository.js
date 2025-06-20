@@ -214,6 +214,12 @@ class DashboardRepository {
       throw new Error(`Error eliminando dashboard: ${error.message}`);
     }
   }
+  
+  // 🗑️ NUEVO: Alias para eliminar por profileId (usado en hard delete)
+  async deleteByProfileId(profileId) {
+    console.log('🗑️ Ejecutando eliminación de dashboard para profile:', profileId);
+    return await this.delete(profileId);
+  }
 
   /**
    * Verificar si dashboard existe
