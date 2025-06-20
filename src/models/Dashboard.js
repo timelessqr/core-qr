@@ -215,7 +215,7 @@ dashboardSchema.statics.crearConfiguracionPorDefecto = function(profileId) {
           icono: 'user'
         },
         configuracion: {
-          tipo: 'text',
+          tipo: 'list',
           mostrarTitulos: true,
           mostrarDescripciones: true
         }

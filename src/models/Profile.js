@@ -101,10 +101,10 @@ const profileSchema = new mongoose.Schema({
   },
   
   // Referencias
-  usuario: {
+  cliente: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, 'El usuario es requerido']
+    ref: 'Client',
+    required: [true, 'El cliente es requerido']
   },
   
   // Estado
@@ -121,7 +121,7 @@ const profileSchema = new mongoose.Schema({
 });
 
 // Índices
-profileSchema.index({ usuario: 1, isActive: 1 });
+profileSchema.index({ cliente: 1, isActive: 1 });
 profileSchema.index({ qr: 1 });
 profileSchema.index({ 'fechaNacimiento': 1, 'fechaFallecimiento': 1 });
 

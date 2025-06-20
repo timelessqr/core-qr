@@ -2,7 +2,72 @@ const Joi = require('joi');
 const { FORMATOS_PERMITIDOS, FILE_LIMITS } = require('./constants');
 
 const schemas = {
-  // Validación de registro de usuario
+  // Validación de cliente
+  client: Joi.object({
+    nombre: Joi.string()
+      .min(2)
+      .max(50)
+      .trim()
+      .required()
+      .messages({
+        'string.min': 'El nombre debe tener al menos 2 caracteres',
+        'string.max': 'El nombre no puede exceder 50 caracteres',
+        'any.required': 'El nombre es requerido'
+      }),
+    apellido: Joi.string()
+      .min(2)
+      .max(50)
+      .trim()
+      .required()
+      .messages({
+        'string.min': 'El apellido debe tener al menos 2 caracteres',
+        'string.max': 'El apellido no puede exceder 50 caracteres',
+        'any.required': 'El apellido es requerido'
+      }),
+    telefono: Joi.string()
+      .pattern(/^[\d\-\+\(\)\s]+$/)
+      .min(7)
+      .max(20)
+      .trim()
+      .required()
+      .messages({
+        'string.pattern.base': 'Formato de teléfono inválido',
+        'string.min': 'El teléfono debe tener al menos 7 caracteres',
+        'string.max': 'El teléfono no puede exceder 20 caracteres',
+        'any.required': 'El teléfono es requerido'
+      }),
+    email: Joi.string()
+      .email()
+      .lowercase()
+      .trim()
+      .optional()
+      .allow('')
+      .messages({
+        'string.email': 'Debe ser un email válido'
+      }),
+    direccion: Joi.string()
+      .max(200)
+      .trim()
+      .optional()
+      .allow(''),
+    observaciones: Joi.string()
+      .max(500)
+      .trim()
+      .optional()
+      .allow('')
+  }),
+
+  // Validación de actualización de cliente
+  clientUpdate: Joi.object({
+    nombre: Joi.string().min(2).max(50).trim().optional(),
+    apellido: Joi.string().min(2).max(50).trim().optional(),
+    telefono: Joi.string().pattern(/^[\d\-\+\(\)\s]+$/).min(7).max(20).trim().optional(),
+    email: Joi.string().email().lowercase().trim().optional().allow(''),
+    direccion: Joi.string().max(200).trim().optional().allow(''),
+    observaciones: Joi.string().max(500).trim().optional().allow('')
+  }),
+
+  // Validación de registro de usuario (solo admin)
   register: Joi.object({
     nombre: Joi.string()
       .min(2)
@@ -29,12 +94,7 @@ const schemas = {
       .messages({
         'string.min': 'La contraseña debe tener al menos 6 caracteres',
         'any.required': 'La contraseña es requerida'
-      }),
-    telefono: Joi.string()
-      .max(20)
-      .trim()
-      .optional()
-      .allow('')
+      })
   }),
   
   // Validación de login
@@ -92,7 +152,7 @@ const schemas = {
       cementerio: Joi.string().max(100).trim().optional().allow('')
     }).optional(),
     biografia: Joi.string()
-      .max(10000) // Se validará según plan en el servicio
+      .max(10000)
       .trim()
       .optional()
       .allow(''),
@@ -109,26 +169,6 @@ const schemas = {
     }).optional()
   }),
   
-  // Validación de actualización de perfil
-  profileUpdate: Joi.object({
-    nombre: Joi.string().min(2).max(100).trim().optional(),
-    fechaNacimiento: Joi.date().max('now').optional(),
-    fechaFallecimiento: Joi.date().max('now').optional(),
-    frase: Joi.string().max(200).trim().optional().allow(''),
-    ubicacion: Joi.object({
-      ciudad: Joi.string().max(50).trim().optional().allow(''),
-      pais: Joi.string().max(50).trim().optional().allow(''),
-      cementerio: Joi.string().max(100).trim().optional().allow('')
-    }).optional(),
-    biografia: Joi.string().max(10000).trim().optional().allow(''),
-    profesion: Joi.string().max(100).trim().optional().allow(''),
-    familia: Joi.object({
-      conyuge: Joi.string().max(100).trim().optional().allow(''),
-      hijos: Joi.array().items(Joi.string().max(100).trim()).optional(),
-      padres: Joi.array().items(Joi.string().max(100).trim()).optional(),
-      hermanos: Joi.array().items(Joi.string().max(100).trim()).optional()
-    }).optional()
-  }),
   // Validación de actualización de perfil
   profileUpdate: Joi.object({
     nombre: Joi.string().min(2).max(100).trim().optional(),
@@ -168,8 +208,8 @@ const schemas = {
 const validate = (schema) => {
   return (req, res, next) => {
     const { error } = schema.validate(req.body, {
-      abortEarly: false, // Retorna todos los errores
-      stripUnknown: true // Remueve campos no definidos
+      abortEarly: false,
+      stripUnknown: true
     });
     
     if (error) {
@@ -226,8 +266,20 @@ const validateFile = (tipo) => {
   };
 };
 
+/**
+ * Validador específico para datos de cliente
+ */
+const validateClientData = (data, isUpdate = false) => {
+  const schema = isUpdate ? schemas.clientUpdate : schemas.client;
+  return schema.validate(data, {
+    abortEarly: false,
+    stripUnknown: true
+  });
+};
+
 module.exports = { 
   schemas, 
   validate,
-  validateFile
+  validateFile,
+  validateClientData
 };

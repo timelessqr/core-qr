@@ -1,44 +1,31 @@
 const profileRepository = require('../repositories/profileRepository');
 const qrService = require('../../qr/services/qrService');
-const userRepository = require('../../auth/repositories/userRepository');
-const { PLANS, MESSAGES } = require('../../../utils/constants');
+const clientRepository = require('../../clients/repositories/clientRepository');
+const { MESSAGES } = require('../../../utils/constants');
 
 class ProfileService {
-  async create(profileData, userId) {
+  async create(profileData, clientId) {
     try {
-      // Verificar límites del plan del usuario
-      const user = await userRepository.findById(userId);
-      if (!user) {
-        throw new Error(MESSAGES.ERROR.USER_NOT_FOUND);
-      }
-      
-      const userProfiles = await profileRepository.findByUserId(userId);
-      const planLimits = PLANS[user.plan.toUpperCase()]?.limits || PLANS.BASICO.limits;
-      
-      // Por ahora no limitamos número de perfiles, pero validamos biografía
-      if (profileData.biografia && profileData.biografia.length > planLimits.biografia) {
-        throw new Error(`La biografía no puede exceder ${planLimits.biografia} caracteres para el plan ${user.plan}`);
+      // Verificar que el cliente existe
+      const client = await clientRepository.findById(clientId);
+      if (!client) {
+        throw new Error('Cliente no encontrado');
       }
       
       // Crear perfil
-      const profileDataWithUser = {
+      const profileDataWithClient = {
         ...profileData,
-        usuario: userId
+        cliente: clientId
       };
       
-      const profile = await profileRepository.create(profileDataWithUser);
+      const profile = await profileRepository.create(profileDataWithClient);
       
       // Auto-generar QR para el perfil
       try {
-        const qrData = await qrService.createQRForProfile(profile._id, userId);
+        const qrData = await qrService.createQRForProfile(profile._id, clientId);
         
         // Vincular QR al perfil
         await profileRepository.linkQR(profile._id, qrData.id);
-        
-        // Agregar perfil al usuario
-        await userRepository.update(userId, {
-          $push: { perfiles: profile._id }
-        });
         
         return {
           id: profile._id,
@@ -58,6 +45,11 @@ class ProfileService {
             qrImage: qrData.qrImage
           },
           edadAlFallecer: this.calculateAge(profile.fechaNacimiento, profile.fechaFallecimiento),
+          cliente: {
+            id: client._id,
+            nombre: client.nombreCompleto,
+            codigo: client.codigoCliente
+          },
           createdAt: profile.createdAt
         };
       } catch (qrError) {
@@ -77,16 +69,11 @@ class ProfileService {
     }
   }
   
-  async getById(profileId, userId) {
+  async getById(profileId) {
     try {
       const profile = await profileRepository.findById(profileId);
       if (!profile) {
         throw new Error(MESSAGES.ERROR.PROFILE_NOT_FOUND);
-      }
-      
-      // Verificar que el perfil pertenece al usuario
-      if (profile.usuario._id.toString() !== userId) {
-        throw new Error('No tienes permisos para ver este perfil');
       }
       
       return this.formatProfileResponse(profile);
@@ -95,9 +82,12 @@ class ProfileService {
     }
   }
   
-  async getUserProfiles(userId) {
+  async getClientProfiles(clientId) {
     try {
-      const profiles = await profileRepository.findByUserId(userId);
+      // Verificar que el cliente existe
+      await clientRepository.findById(clientId);
+      
+      const profiles = await profileRepository.findByClientId(clientId);
       
       return profiles.map(profile => ({
         id: profile._id,
@@ -121,26 +111,11 @@ class ProfileService {
     }
   }
   
-  async update(profileId, userId, updates) {
+  async update(profileId, updates) {
     try {
       const profile = await profileRepository.findById(profileId);
       if (!profile) {
         throw new Error(MESSAGES.ERROR.PROFILE_NOT_FOUND);
-      }
-      
-      // Verificar permisos
-      if (profile.usuario._id.toString() !== userId) {
-        throw new Error('No tienes permisos para actualizar este perfil');
-      }
-      
-      // Validar biografía según plan del usuario
-      if (updates.biografia) {
-        const user = await userRepository.findById(userId);
-        const planLimits = PLANS[user.plan.toUpperCase()]?.limits || PLANS.BASICO.limits;
-        
-        if (updates.biografia.length > planLimits.biografia) {
-          throw new Error(`La biografía no puede exceder ${planLimits.biografia} caracteres para el plan ${user.plan}`);
-        }
       }
       
       const updatedProfile = await profileRepository.update(profileId, updates);
@@ -151,16 +126,11 @@ class ProfileService {
     }
   }
   
-  async delete(profileId, userId) {
+  async delete(profileId) {
     try {
       const profile = await profileRepository.findById(profileId);
       if (!profile) {
         throw new Error(MESSAGES.ERROR.PROFILE_NOT_FOUND);
-      }
-      
-      // Verificar permisos
-      if (profile.usuario._id.toString() !== userId) {
-        throw new Error('No tienes permisos para eliminar este perfil');
       }
       
       // Desactivar perfil
@@ -174,10 +144,9 @@ class ProfileService {
     }
   }
   
-  // VERSIÓN ARREGLADA - Busca perfil directamente por ID
+  // Buscar perfil directamente por ID para acceso público
   async getPublicMemorial(profileId) {
     try {
-      // Buscar perfil directamente por su ID
       const profile = await profileRepository.getPublicProfile(profileId);
       if (!profile) {
         throw new Error('Memorial no encontrado o no público');
@@ -202,6 +171,44 @@ class ProfileService {
           escaneos: profile.qr.estadisticas?.escaneos || 0
         } : null
       };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener todos los perfiles (para admin)
+   */
+  async getAllProfiles(options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        search = '',
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = options;
+
+      const profiles = await profileRepository.findAllWithClient({
+        page,
+        limit,
+        search,
+        sortBy,
+        sortOrder
+      });
+
+      return profiles;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Crear perfil desde admin (con clientId)
+   */
+  async createFromAdmin(profileData, clientId) {
+    try {
+      return await this.create(profileData, clientId);
     } catch (error) {
       throw error;
     }
@@ -244,7 +251,7 @@ class ProfileService {
       } : null,
       edadAlFallecer: this.calculateAge(profile.fechaNacimiento, profile.fechaFallecimiento),
       isPublic: profile.isPublic,
-      usuario: profile.usuario,
+      cliente: profile.cliente,
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt
     };

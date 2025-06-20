@@ -6,29 +6,9 @@ const { responseHelper } = require('../../../utils/responseHelper');
 const { MESSAGES } = require('../../../utils/constants');
 
 class AuthController {
-  async register(req, res) {
-    try {
-      const { nombre, email, password, telefono } = req.body;
-      
-      const result = await authService.register({
-        nombre,
-        email, 
-        password,
-        telefono
-      });
-      
-      responseHelper.success(
-        res, 
-        result, 
-        MESSAGES.SUCCESS.USER_CREATED, 
-        201
-      );
-    } catch (error) {
-      console.error('Error en registro:', error);
-      responseHelper.error(res, error.message, 400);
-    }
-  }
-  
+  /**
+   * Login de administrador
+   */
   async login(req, res) {
     try {
       const { email, password } = req.body;
@@ -42,6 +22,9 @@ class AuthController {
     }
   }
   
+  /**
+   * Obtener perfil del admin autenticado
+   */
   async getProfile(req, res) {
     try {
       const userId = req.user.id;
@@ -54,12 +37,25 @@ class AuthController {
     }
   }
   
+  /**
+   * Actualizar perfil del admin
+   */
   async updateProfile(req, res) {
     try {
       const userId = req.user.id;
       const updates = req.body;
       
-      const user = await authService.updateUserProfile(userId, updates);
+      // Solo permitir actualizar campos específicos
+      const allowedUpdates = ['nombre', 'telefono'];
+      const filteredUpdates = {};
+      
+      allowedUpdates.forEach(field => {
+        if (updates[field] !== undefined) {
+          filteredUpdates[field] = updates[field];
+        }
+      });
+      
+      const user = await authService.updateUserProfile(userId, filteredUpdates);
       
       responseHelper.success(res, user, 'Perfil actualizado exitosamente');
     } catch (error) {
@@ -68,10 +64,21 @@ class AuthController {
     }
   }
   
+  /**
+   * Cambiar contraseña del admin
+   */
   async changePassword(req, res) {
     try {
       const userId = req.user.id;
       const { currentPassword, newPassword } = req.body;
+      
+      if (!currentPassword || !newPassword) {
+        return responseHelper.error(res, 'Contraseña actual y nueva son requeridas', 400);
+      }
+
+      if (newPassword.length < 6) {
+        return responseHelper.error(res, 'La nueva contraseña debe tener al menos 6 caracteres', 400);
+      }
       
       const result = await authService.changePassword(userId, currentPassword, newPassword);
       
@@ -82,39 +89,81 @@ class AuthController {
     }
   }
   
-  async upgradePlan(req, res) {
-    try {
-      const userId = req.user.id;
-      const { plan } = req.body;
-      
-      const result = await authService.upgradePlan(userId, plan);
-      
-      responseHelper.success(res, result, 'Plan actualizado exitosamente');
-    } catch (error) {
-      console.error('Error actualizando plan:', error);
-      responseHelper.error(res, error.message, 400);
-    }
-  }
-  
+  /**
+   * Logout (en JWT es solo informativo)
+   */
   async logout(req, res) {
     try {
-      // En JWT no hay logout del lado del servidor, 
-      // pero podemos dar una respuesta exitosa
-      responseHelper.success(res, null, 'Logout exitoso');
+      // En JWT no hay logout del lado del servidor
+      // El frontend debe eliminar el token
+      responseHelper.success(res, {
+        message: 'Sesión cerrada exitosamente',
+        action: 'Elimine el token del almacenamiento local'
+      }, 'Logout exitoso');
     } catch (error) {
       responseHelper.error(res, error.message, 400);
     }
   }
   
+  /**
+   * Validar token y obtener info del usuario
+   */
   async validateToken(req, res) {
     try {
       // Si llegamos aquí, el token es válido (gracias al middleware)
       const userId = req.user.id;
       const user = await authService.getUserProfile(userId);
       
-      responseHelper.success(res, { valid: true, user }, 'Token válido');
+      responseHelper.success(res, { 
+        valid: true, 
+        user: {
+          id: user.id,
+          nombre: user.nombre,
+          email: user.email,
+          role: 'admin'
+        },
+        permissions: ['clients:read', 'clients:write', 'profiles:read', 'profiles:write', 'admin:all']
+      }, 'Token válido');
     } catch (error) {
       responseHelper.error(res, 'Token inválido', 401);
+    }
+  }
+
+  /**
+   * Crear nuevo admin (futuro - solo super admin)
+   */
+  async createAdmin(req, res) {
+    try {
+      // TODO: Implementar cuando sea necesario
+      // Verificar que el usuario actual sea super admin
+      // Crear nuevo usuario admin
+      responseHelper.error(res, 'Funcionalidad no implementada', 501);
+    } catch (error) {
+      responseHelper.error(res, error.message, 400);
+    }
+  }
+
+  /**
+   * Información del sistema para el admin
+   */
+  async getSystemInfo(req, res) {
+    try {
+      const info = {
+        version: '2.0.0',
+        environment: process.env.NODE_ENV || 'development',
+        admin: req.user.nombre,
+        loginTime: new Date().toISOString(),
+        permissions: {
+          canManageClients: true,
+          canManageProfiles: true,
+          canManageMedia: true,
+          canViewStats: true
+        }
+      };
+
+      responseHelper.success(res, info, 'Información del sistema obtenida');
+    } catch (error) {
+      responseHelper.error(res, error.message, 500);
     }
   }
 }

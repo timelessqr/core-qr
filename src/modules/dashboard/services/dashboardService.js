@@ -13,10 +13,10 @@ class DashboardService {
    */
   async createDefault(profileId, userId) {
     try {
-      // Verificar que el perfil existe y pertenece al usuario
-      const profile = await Profile.findOne({ _id: profileId, usuario: userId });
+      // Verificar que el perfil existe (modelo B2B)
+      const profile = await Profile.findById(profileId);
       if (!profile) {
-        throw new Error('Perfil no encontrado o no autorizado');
+        throw new Error('Perfil no encontrado');
       }
 
       // Verificar si ya existe un dashboard
@@ -47,10 +47,10 @@ class DashboardService {
    */
   async getByProfile(profileId, userId) {
     try {
-      // Verificar que el perfil pertenece al usuario
-      const profile = await Profile.findOne({ _id: profileId, usuario: userId });
+      // Verificar que el perfil existe (modelo B2B)
+      const profile = await Profile.findById(profileId);
       if (!profile) {
-        throw new Error('Perfil no encontrado o no autorizado');
+        throw new Error('Perfil no encontrado');
       }
 
       let dashboard = await dashboardRepository.findByProfile(profileId);
@@ -63,7 +63,7 @@ class DashboardService {
 
       return {
         profileId,
-        profileName: `${profile.nombre} ${profile.apellido}`,
+        profileName: profile.nombre,
         dashboard: this.formatDashboard(dashboard)
       };
 
@@ -326,19 +326,23 @@ class DashboardService {
   // ===============================
 
   /**
-   * Verificar acceso del usuario al perfil
+   * Verificar acceso del usuario al perfil - MODELO B2B
+   * En el modelo B2B, el admin puede gestionar todos los perfiles
    */
   async verifyUserAccess(profileId, userId) {
-    const profile = await Profile.findOne({ _id: profileId, usuario: userId });
+    // En modelo B2B, verificar que existe el perfil (admin gestiona todos)
+    const profile = await Profile.findById(profileId);
     if (!profile) {
-      throw new Error('Perfil no encontrado o no autorizado');
+      throw new Error('Perfil no encontrado');
     }
 
+    // Verificar que el usuario es admin
     const user = await User.findById(userId);
     if (!user) {
       throw new Error('Usuario no encontrado');
     }
 
+    // En modelo B2B, todos los usuarios son admins
     return user;
   }
 
