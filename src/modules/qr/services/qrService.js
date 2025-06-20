@@ -42,11 +42,15 @@ class QRService {
       console.log('=== DEBUG QR GENERATION ===');
       console.log('URLS.QR_BASE desde constants:', URLS.QR_BASE);
       console.log('process.env.QR_BASE_URL:', process.env.QR_BASE_URL);
+      console.log('NODE_ENV:', process.env.NODE_ENV);
+      console.log('PORT:', process.env.PORT);
       console.log('Código generado:', code);
       
       // Crear URL del memorial
       const url = `${URLS.QR_BASE}/${code}`;
       console.log('URL final generada:', url);
+      console.log('¿Es localhost?:', url.includes('localhost'));
+      console.log('¿Es IP 192.168.1.34?:', url.includes('192.168.1.34'));
       console.log('=========================');
       
       // Crear QR en base de datos
