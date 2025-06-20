@@ -16,7 +16,12 @@ const profileSchema = new mongoose.Schema({
     required: [true, 'La fecha de nacimiento es requerida'],
     validate: {
       validator: function(v) {
-        return v < new Date();
+        // Comparar solo fechas, no horas
+        const today = new Date();
+        const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const nacimientoDate = new Date(v.getFullYear(), v.getMonth(), v.getDate());
+        
+        return nacimientoDate < todayDate;
       },
       message: 'La fecha de nacimiento debe ser anterior a hoy'
     }
@@ -26,7 +31,23 @@ const profileSchema = new mongoose.Schema({
     required: [true, 'La fecha de fallecimiento es requerida'],
     validate: {
       validator: function(v) {
-        return v <= new Date() && v >= this.fechaNacimiento;
+        // Comparar solo fechas, no horas (evita problemas de zona horaria)
+        const today = new Date();
+        const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const fallecimientoDate = new Date(v.getFullYear(), v.getMonth(), v.getDate());
+        
+        // Verificar que no sea fecha futura
+        if (fallecimientoDate > todayDate) {
+          return false;
+        }
+        
+        // Verificar que sea posterior al nacimiento (solo si fechaNacimiento existe)
+        if (this.fechaNacimiento) {
+          const nacimientoDate = new Date(this.fechaNacimiento.getFullYear(), this.fechaNacimiento.getMonth(), this.fechaNacimiento.getDate());
+          return fallecimientoDate >= nacimientoDate;
+        }
+        
+        return true;
       },
       message: 'La fecha de fallecimiento debe ser posterior al nacimiento y no futura'
     }
