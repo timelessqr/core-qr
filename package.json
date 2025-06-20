@@ -17,7 +17,8 @@
     "lint:fix": "eslint src/ --fix",
     "setup:admin": "node create-initial-admin.js",
     "check:db": "node check-database.js",
-    "clear:db": "node check-database.js clear"
+    "clear:db": "node clear-database.js",
+    "reset:all": "node clear-database.js && node create-initial-admin.js"
   },
   "keywords": [],
   "author": "",

@@ -49,7 +49,7 @@ async function createInitialAdmin() {
     const adminData = {
       nombre: 'Dueño de la Empresa',
       email: 'admin@lazosdevida.com',
-      password: 'admin123456', // Cambiar después del primer login
+      password: 'admin123', // Contraseña simple para desarrollo
       telefono: '+54 11 1234-5678',
       plan: 'premium'
     };
