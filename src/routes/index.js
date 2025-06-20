@@ -6,6 +6,7 @@ const mediaRoutes = require('../modules/media/routes/mediaRoutes');
 const dashboardRoutes = require('../modules/dashboard/routes/dashboardRoutes');
 const clientRoutes = require('../modules/clients/routes/clientRoutes');
 const adminRoutes = require('../modules/admin/routes/adminRoutes');
+const comentarioRoutes = require('../modules/comentarios/routes/comentarioRoutes');
 const qrController = require('../modules/qr/controllers/qrController');
 
 const router = express.Router();
@@ -75,6 +76,18 @@ router.get('/', (req, res) => {
         getPublic: 'GET /api/dashboard/public/:profileId (público)',
         templates: 'GET /api/dashboard/templates (público)'
       },
+      comentarios: {
+        validarCodigo: 'POST /api/memorial/:qrCode/validar-codigo (público)',
+        crear: 'POST /api/memorial/:qrCode/comentarios (público con token)',
+        getPublicos: 'GET /api/memorial/:qrCode/comentarios (público)',
+        getConfig: 'GET /api/memorial/:qrCode/comentarios/config (público)',
+        configurarCodigo: 'PUT /api/admin/profiles/:profileId/codigo-comentarios (admin)',
+        generarCodigo: 'POST /api/admin/profiles/:profileId/generar-codigo (admin)',
+        getAdmin: 'GET /api/admin/profiles/:profileId/comentarios (admin)',
+        eliminar: 'DELETE /api/admin/comentarios/:comentarioId (admin)',
+        buscar: 'GET /api/admin/profiles/:profileId/comentarios/search (admin)',
+        stats: 'GET /api/admin/profiles/:profileId/comentarios/stats (admin)'
+      },
       public: {
         memorial: 'GET /api/memorial/:qrCode (público - acceso a memorial)',
         profilePublic: 'GET /api/profiles/:profileId/public (público)'
@@ -123,6 +136,9 @@ router.use('/media', mediaRoutes);
 
 // Rutas de dashboard
 router.use('/dashboard', dashboardRoutes);
+
+// Rutas de comentarios (incluye públicas y admin)
+router.use('/', comentarioRoutes);
 
 // Ruta pública para acceder a memoriales vía QR (SIN autenticación)
 router.get('/memorial/:qrCode', qrController.accessMemorial);

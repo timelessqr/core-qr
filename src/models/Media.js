@@ -2,136 +2,256 @@
 // src/models/Media.js
 // ====================================
 const mongoose = require('mongoose');
-const { SECCIONES_DISPONIBLES } = require('../utils/constants');
 
 const mediaSchema = new mongoose.Schema({
-  perfil: {
+  memorial: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Profile',
-    required: [true, 'El perfil es requerido']
+    required: [true, 'El memorial es requerido']
   },
   tipo: {
     type: String,
     enum: ['foto', 'video'],
     required: [true, 'El tipo de media es requerido']
   },
-  seccion: {
+  titulo: {
     type: String,
-    enum: SECCIONES_DISPONIBLES.filter(s => 
-      ['galeria_fotos', 'videos_memoriales', 'cronologia', 'testimonios', 'logros', 'hobbies'].includes(s)
-    ),
-    required: [true, 'La sección es requerida']
+    trim: true,
+    maxlength: [200, 'El título no puede exceder 200 caracteres'],
+    default: ''
   },
-  
-  // Archivo original
-  nombreOriginal: {
+  descripcion: {
     type: String,
-    required: [true, 'El nombre original es requerido'],
-    trim: true
+    trim: true,
+    maxlength: [500, 'La descripción no puede exceder 500 caracteres'],
+    default: ''
   },
   archivo: {
+    nombreOriginal: {
+      type: String,
+      required: [true, 'El nombre original es requerido']
+    },
+    nombreArchivo: {
+      type: String,
+      required: [true, 'El nombre del archivo es requerido']
+    },
+    ruta: {
+      type: String,
+      required: [true, 'La ruta del archivo es requerida']
+    },
     url: {
       type: String,
-      required: [true, 'La URL del archivo es requerida'],
-      trim: true
+      required: [true, 'La URL del archivo es requerida']
+    },
+    mimeType: {
+      type: String,
+      required: [true, 'El tipo MIME es requerido']
     },
     tamaño: {
       type: Number,
-      required: [true, 'El tamaño es requerido'],
-      min: [1, 'El tamaño debe ser mayor a 0']
+      required: [true, 'El tamaño del archivo es requerido'],
+      min: [0, 'El tamaño no puede ser negativo']
+    }
+  },
+  dimensiones: {
+    ancho: {
+      type: Number,
+      min: [0, 'El ancho no puede ser negativo']
+    },
+    alto: {
+      type: Number,
+      min: [0, 'El alto no puede ser negativo']
     },
     duracion: {
       type: Number, // para videos en segundos
       min: [0, 'La duración no puede ser negativa']
-    },
-    formato: {
-      type: String,
-      required: [true, 'El formato es requerido'],
-      lowercase: true,
-      trim: true
-    },
-    dimensiones: {
-      ancho: Number,
-      alto: Number
-    },
-    calidad: {
-      type: String, // '720p', '1080p', 'original', etc.
-      default: 'original'
     }
   },
-  
-  // Metadata
-  titulo: {
-    type: String,
-    maxlength: [100, 'El título no puede exceder 100 caracteres'],
-    trim: true
-  },
-  descripcion: {
-    type: String,
-    maxlength: [500, 'La descripción no puede exceder 500 caracteres'],
-    trim: true
-  },
-  fecha: {
-    type: Date,
-    default: Date.now
+  metadata: {
+    fechaOriginal: Date, // fecha cuando se tomó la foto/video
+    ubicacion: {
+      latitud: Number,
+      longitud: Number,
+      direccion: String
+    },
+    camara: String,
+    configuracion: {
+      iso: Number,
+      apertura: String,
+      velocidad: String
+    }
   },
   orden: {
     type: Number,
     default: 0,
-    min: 0
+    min: [0, 'El orden no puede ser negativo']
   },
-  tags: [{
-    type: String,
-    trim: true,
-    maxlength: [30, 'El tag no puede exceder 30 caracteres']
-  }],
-  
-  // Estado de procesamiento
-  estado: {
-    type: String,
-    enum: ['procesando', 'completado', 'error'],
-    default: 'procesando'
+  esPortada: {
+    type: Boolean,
+    default: false
   },
-  errorMessage: {
-    type: String,
-    maxlength: [500, 'El mensaje de error no puede exceder 500 caracteres']
+  estaActivo: {
+    type: Boolean,
+    default: true
   },
-  
-  // Información de upload
-  uploadedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, 'El usuario que subió el archivo es requerido']
+  procesado: {
+    estado: {
+      type: String,
+      enum: ['pendiente', 'procesando', 'completado', 'error'],
+      default: 'pendiente'
+    },
+    versiones: {
+      thumbnail: String, // URL del thumbnail
+      small: String,     // URL de versión pequeña
+      medium: String,    // URL de versión mediana
+      large: String      // URL de versión grande
+    },
+    fechaProcesado: Date,
+    errorMensaje: String
+  },
+  estadisticas: {
+    vistas: {
+      type: Number,
+      default: 0,
+      min: [0, 'Las vistas no pueden ser negativas']
+    },
+    descargas: {
+      type: Number,
+      default: 0,
+      min: [0, 'Las descargas no pueden ser negativas']
+    },
+    compartidos: {
+      type: Number,
+      default: 0,
+      min: [0, 'Los compartidos no pueden ser negativos']
+    }
   }
 }, {
   timestamps: true
 });
 
 // Índices
-mediaSchema.index({ perfil: 1, seccion: 1, orden: 1 });
-mediaSchema.index({ tipo: 1, estado: 1 });
-mediaSchema.index({ uploadedBy: 1 });
+mediaSchema.index({ memorial: 1, tipo: 1, estaActivo: 1 });
+mediaSchema.index({ memorial: 1, orden: 1 });
+mediaSchema.index({ memorial: 1, esPortada: 1 });
+mediaSchema.index({ createdAt: -1 });
+mediaSchema.index({ 'archivo.url': 1 });
 
-// Método para obtener URL de thumbnail (para videos)
-mediaSchema.methods.getThumbnailUrl = function() {
-  if (this.tipo === 'video' && this.archivo.url) {
-    // Generar URL de thumbnail basada en el ID del media
-    const mediaDir = `/uploads/media/${this._id}`;
-    return `${mediaDir}/${this._id}_thumb.jpg`;
+// Método para obtener URL apropiada según el tamaño
+mediaSchema.methods.getUrlPorTamaño = function(tamaño = 'medium') {
+  const versiones = this.procesado.versiones;
+  
+  switch (tamaño) {
+    case 'thumbnail':
+      return versiones.thumbnail || this.archivo.url;
+    case 'small':
+      return versiones.small || this.archivo.url;
+    case 'medium':
+      return versiones.medium || this.archivo.url;
+    case 'large':
+      return versiones.large || this.archivo.url;
+    case 'original':
+    default:
+      return this.archivo.url;
   }
-  return this.archivo.url;
 };
 
-// Método virtual para obtener URL completa
-mediaSchema.virtual('fullUrl').get(function() {
-  if (this.archivo.url.startsWith('http')) {
-    return this.archivo.url;
+// Método para incrementar vistas
+mediaSchema.methods.incrementarVistas = async function() {
+  this.estadisticas.vistas += 1;
+  return await this.save();
+};
+
+// Método para formatear para vista pública
+mediaSchema.methods.toPublicJSON = function() {
+  return {
+    id: this._id,
+    tipo: this.tipo,
+    titulo: this.titulo,
+    descripcion: this.descripcion,
+    url: this.archivo.url,
+    urlThumbnail: this.getUrlPorTamaño('thumbnail'),
+    urlMedium: this.getUrlPorTamaño('medium'),
+    dimensiones: this.dimensiones,
+    orden: this.orden,
+    esPortada: this.esPortada,
+    fechaSubida: this.createdAt,
+    fechaOriginal: this.metadata.fechaOriginal
+  };
+};
+
+// Método para formatear para admin
+mediaSchema.methods.toAdminJSON = function() {
+  return {
+    id: this._id,
+    tipo: this.tipo,
+    titulo: this.titulo,
+    descripcion: this.descripcion,
+    archivo: this.archivo,
+    dimensiones: this.dimensiones,
+    metadata: this.metadata,
+    orden: this.orden,
+    esPortada: this.esPortada,
+    estaActivo: this.estaActivo,
+    procesado: this.procesado,
+    estadisticas: this.estadisticas,
+    fechaSubida: this.createdAt,
+    fechaActualizacion: this.updatedAt
+  };
+};
+
+// Middleware para mantener solo una foto de portada por memorial
+mediaSchema.pre('save', async function(next) {
+  if (this.esPortada && this.isModified('esPortada')) {
+    // Remover portada de otras fotos del mismo memorial
+    await this.constructor.updateMany(
+      { 
+        memorial: this.memorial, 
+        _id: { $ne: this._id },
+        tipo: this.tipo 
+      },
+      { esPortada: false }
+    );
   }
-  return `${process.env.FRONTEND_URL || 'http://localhost:3000'}${this.archivo.url}`;
+  next();
 });
 
-// Incluir virtuals en JSON
-mediaSchema.set('toJSON', { virtuals: true });
-mediaSchema.set('toObject', { virtuals: true });
+// Método estático para obtener media por memorial
+mediaSchema.statics.getByMemorial = async function(memorialId, tipo = null, activo = true) {
+  const filtro = { 
+    memorial: memorialId,
+    estaActivo: activo
+  };
+  
+  if (tipo) {
+    filtro.tipo = tipo;
+  }
+  
+  return this.find(filtro).sort({ orden: 1, createdAt: 1 });
+};
+
+// Método estático para obtener portada
+mediaSchema.statics.getPortada = async function(memorialId, tipo = 'foto') {
+  return this.findOne({
+    memorial: memorialId,
+    tipo,
+    esPortada: true,
+    estaActivo: true
+  });
+};
+
+// Método estático para contar media por memorial
+mediaSchema.statics.countByMemorial = async function(memorialId, tipo = null) {
+  const filtro = { 
+    memorial: memorialId,
+    estaActivo: true
+  };
+  
+  if (tipo) {
+    filtro.tipo = tipo;
+  }
+  
+  return this.countDocuments(filtro);
+};
 
 module.exports = mongoose.model('Media', mediaSchema);

@@ -20,6 +20,22 @@ class ProfileService {
       
       const profile = await profileRepository.create(profileDataWithClient);
       
+      // Auto-generar código de comentarios
+      const codigoComentarios = profile.generarCodigoComentarios();
+      await profileRepository.update(profile._id, {
+        codigoComentarios,
+        comentariosHabilitados: true
+      });
+      
+      // 🔥 AUTO-CREAR DASHBOARD EN LA BASE DE DATOS
+      const dashboardService = require('../../dashboard/services/dashboardService');
+      try {
+        await dashboardService.createDefault(profile._id, clientId);
+        console.log('✅ Dashboard creado automáticamente para memorial:', profile._id);
+      } catch (dashboardError) {
+        console.warn('⚠️ Error creando dashboard automático:', dashboardError.message);
+      }
+      
       // Auto-generar QR para el perfil
       try {
         const qrData = await qrService.createQRForProfile(profile._id, clientId);
@@ -38,6 +54,7 @@ class ProfileService {
           biografia: profile.biografia,
           profesion: profile.profesion,
           familia: profile.familia,
+          codigoComentarios, // Incluir código generado
           qr: {
             id: qrData.id,
             code: qrData.code,
@@ -152,6 +169,19 @@ class ProfileService {
         throw new Error('Memorial no encontrado o no público');
       }
       
+      // Obtener media del memorial (fotos y videos)
+      const mediaService = require('../../media/services/mediaService');
+      const mediaData = await mediaService.getPublicMedia(profileId);
+      
+      // Obtener configuración de dashboard
+      const dashboardService = require('../../dashboard/services/dashboardService');
+      let dashboardData = null;
+      try {
+        dashboardData = await dashboardService.getPublicDashboard(profileId);
+      } catch (dashError) {
+        console.warn('Dashboard no encontrado, usando configuración por defecto');
+      }
+      
       return {
         id: profile._id,
         nombre: profile.nombre,
@@ -165,6 +195,20 @@ class ProfileService {
         familia: profile.familia,
         edadAlFallecer: this.calculateAge(profile.fechaNacimiento, profile.fechaFallecimiento),
         añosTranscurridos: this.calculateYearsSince(profile.fechaFallecimiento),
+        // 🔥 NUEVA SECCIÓN: MEDIA
+        galeria: mediaData.fotos || [],
+        videos: mediaData.videos || [],
+        estadisticasMedia: {
+          totalFotos: mediaData.totalFotos || 0,
+          totalVideos: mediaData.totalVideos || 0
+        },
+        // 🔥 NUEVA SECCIÓN: DASHBOARD
+        dashboard: dashboardData || {
+          tema: 'clasico',
+          colorPrimario: '#8B4513',
+          colorSecundario: '#F5F5DC',
+          secciones: ['biografia', 'galeria_fotos', 'videos_memoriales', 'condolencias']
+        },
         qr: profile.qr ? {
           code: profile.qr.code,
           vistas: profile.qr.estadisticas?.vistas || 0,

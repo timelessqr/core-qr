@@ -96,6 +96,46 @@ class DashboardService {
   }
 
   /**
+   * Obtener dashboard público para memorial (usado en profileService)
+   */
+  async getPublicDashboard(profileId) {
+    try {
+      const dashboard = await dashboardRepository.findByProfile(profileId);
+      
+      if (!dashboard) {
+        // Si no existe dashboard, retornar configuración por defecto
+        return {
+          tema: 'clasico',
+          colorPrimario: '#8B4513',
+          colorSecundario: '#F5F5DC',
+          colorAccento: '#D2691E',
+          secciones: ['biografia', 'galeria_fotos', 'videos_memoriales', 'condolencias'],
+          css: this.generateDefaultCSS()
+        };
+      }
+
+      // Verificar si es público (si hay configuración de privacidad)
+      if (dashboard.privacidad && !dashboard.privacidad.publico) {
+        throw new Error('Este memorial es privado');
+      }
+
+      return {
+        tema: dashboard.configuracion.tema,
+        colorPrimario: dashboard.configuracion.colorPrimario,
+        colorSecundario: dashboard.configuracion.colorSecundario,
+        colorAccento: dashboard.configuracion.colorAccento,
+        secciones: dashboard.secciones
+          .filter(s => s.activa)
+          .sort((a, b) => a.orden - b.orden)
+          .map(s => s.tipo),
+        css: this.generateCustomCSS(dashboard.configuracion)
+      };
+    } catch (error) {
+      throw new Error(`Error obteniendo dashboard público: ${error.message}`);
+    }
+  }
+
+  /**
    * Actualizar configuración general
    */
   async updateConfig(profileId, userId, configUpdates) {
@@ -475,6 +515,27 @@ class DashboardService {
       }
       
       .theme-${config.tema} {
+        font-family: var(--font-family);
+        font-size: var(--font-size-base);
+        color: var(--color-primary);
+      }
+    `;
+  }
+
+  /**
+   * Generar CSS por defecto
+   */
+  generateDefaultCSS() {
+    return `
+      :root {
+        --color-primary: #8B4513;
+        --color-secondary: #F5F5DC;
+        --color-accent: #D2691E;
+        --font-family: Georgia, serif;
+        --font-size-base: 16px;
+      }
+      
+      .theme-clasico {
         font-family: var(--font-family);
         font-size: var(--font-size-base);
         color: var(--color-primary);

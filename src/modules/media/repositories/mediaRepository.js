@@ -2,211 +2,402 @@
 // src/modules/media/repositories/mediaRepository.js
 // ====================================
 const Media = require('../../../models/Media');
-const { SECCIONES_DISPONIBLES } = require('../../../utils/constants');
 
 class MediaRepository {
   /**
-   * Crear nuevo registro de media
+   * Crear nuevo media
    */
   async create(mediaData) {
     try {
       const media = new Media(mediaData);
       return await media.save();
     } catch (error) {
-      throw new Error(`Error creando media: ${error.message}`);
+      throw error;
     }
   }
 
   /**
-   * Buscar media por ID
+   * Obtener media por ID
    */
-  async findById(id) {
+  async findById(mediaId) {
     try {
-      return await Media.findById(id)
-        .populate('perfil', 'nombre apellido')
-        .populate('uploadedBy', 'nombre email');
+      return await Media.findById(mediaId);
     } catch (error) {
-      throw new Error(`Error buscando media: ${error.message}`);
+      throw error;
     }
   }
 
   /**
-   * Buscar todos los media de un perfil
+   * Obtener todos los media de un memorial
    */
-  async findByProfile(profileId, filters = {}) {
+  async findByMemorial(memorialId, options = {}) {
     try {
-      const query = { perfil: profileId };
+      const {
+        tipo = null,
+        activo = true,
+        page = 1,
+        limit = 50,
+        sortBy = 'orden',
+        sortOrder = 'asc'
+      } = options;
+
+      const filtro = { 
+        memorial: memorialId,
+        estaActivo: activo
+      };
       
-      // Aplicar filtros
-      if (filters.tipo) query.tipo = filters.tipo;
-      if (filters.seccion) query.seccion = filters.seccion;
-      if (filters.estado) query.estado = filters.estado;
+      if (tipo) {
+        filtro.tipo = tipo;
+      }
 
-      return await Media.find(query)
-        .populate('uploadedBy', 'nombre email')
-        .sort({ seccion: 1, orden: 1, createdAt: -1 });
+      const sort = {};
+      sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+      
+      // Si ordena por orden, secundario por fecha de creación
+      if (sortBy === 'orden') {
+        sort.createdAt = 1;
+      }
+
+      const skip = (page - 1) * limit;
+
+      const media = await Media.find(filtro)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      const total = await Media.countDocuments(filtro);
+
+      return {
+        media,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1
+      };
     } catch (error) {
-      throw new Error(`Error buscando media del perfil: ${error.message}`);
+      throw error;
     }
   }
 
   /**
-   * Buscar media por usuario
+   * Obtener media público de un memorial (para visitantes)
    */
-  async findByUser(userId, filters = {}) {
+  async getPublicMedia(memorialId, tipo = null) {
     try {
-      const query = { uploadedBy: userId };
+      const filtro = { 
+        memorial: memorialId,
+        estaActivo: true
+      };
       
-      // Aplicar filtros
-      if (filters.tipo) query.tipo = filters.tipo;
-      if (filters.estado) query.estado = filters.estado;
+      if (tipo) {
+        filtro.tipo = tipo;
+      }
 
-      return await Media.find(query)
-        .populate('perfil', 'nombre apellido')
-        .sort({ createdAt: -1 });
+      const media = await Media.find(filtro)
+        .sort({ orden: 1, createdAt: 1 })
+        .lean();
+
+      return media.map(item => ({
+        id: item._id,
+        tipo: item.tipo,
+        titulo: item.titulo,
+        descripcion: item.descripcion,
+        url: item.archivo.url,
+        urlThumbnail: item.procesado?.versiones?.thumbnail || item.archivo.url,
+        urlMedium: item.procesado?.versiones?.medium || item.archivo.url,
+        dimensiones: item.dimensiones,
+        orden: item.orden,
+        esPortada: item.esPortada,
+        fechaSubida: item.createdAt,
+        fechaOriginal: item.metadata?.fechaOriginal
+      }));
     } catch (error) {
-      throw new Error(`Error buscando media del usuario: ${error.message}`);
+      throw error;
     }
   }
 
   /**
    * Actualizar media
    */
-  async update(id, updates) {
+  async update(mediaId, updates) {
     try {
+      const allowedUpdates = [
+        'titulo', 'descripcion', 'orden', 'esPortada', 'estaActivo',
+        'metadata', 'procesado'
+      ];
+      
+      const filteredUpdates = {};
+      Object.keys(updates).forEach(key => {
+        if (allowedUpdates.includes(key)) {
+          filteredUpdates[key] = updates[key];
+        }
+      });
+
       return await Media.findByIdAndUpdate(
-        id,
-        { $set: updates },
+        mediaId,
+        filteredUpdates,
         { new: true, runValidators: true }
       );
     } catch (error) {
-      throw new Error(`Error actualizando media: ${error.message}`);
+      throw error;
     }
   }
 
   /**
-   * Eliminar media
+   * Eliminar media (soft delete)
    */
-  async delete(id) {
+  async delete(mediaId) {
     try {
-      return await Media.findByIdAndDelete(id);
+      return await Media.findByIdAndUpdate(
+        mediaId,
+        { estaActivo: false },
+        { new: true }
+      );
     } catch (error) {
-      throw new Error(`Error eliminando media: ${error.message}`);
+      throw error;
     }
   }
 
   /**
-   * Contar media por perfil y tipo
+   * Eliminar media permanentemente
    */
-  async countByProfileAndType(profileId, tipo) {
+  async hardDelete(mediaId) {
     try {
-      return await Media.countDocuments({ 
-        perfil: profileId, 
-        tipo,
-        estado: 'completado'
-      });
+      return await Media.findByIdAndDelete(mediaId);
     } catch (error) {
-      throw new Error(`Error contando media: ${error.message}`);
+      throw error;
     }
   }
 
   /**
-   * Calcular espacio utilizado por perfil
+   * Reordenar media
    */
-  async getUsedStorageByProfile(profileId) {
+  async reorderMedia(memorialId, newOrder) {
     try {
-      const result = await Media.aggregate([
-        {
-          $match: { 
-            perfil: profileId,
-            estado: 'completado'
-          }
+      const updatePromises = newOrder.map((item, index) => 
+        Media.findByIdAndUpdate(
+          item.id,
+          { orden: index },
+          { new: true }
+        )
+      );
+
+      return await Promise.all(updatePromises);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Establecer portada
+   */
+  async setPortada(mediaId, memorialId, tipo) {
+    try {
+      // Remover portada actual
+      await Media.updateMany(
+        { 
+          memorial: memorialId,
+          tipo,
+          _id: { $ne: mediaId }
         },
-        {
-          $group: {
-            _id: null,
-            totalSize: { $sum: '$archivo.tamaño' }
-          }
-        }
-      ]);
+        { esPortada: false }
+      );
 
-      return result.length > 0 ? result[0].totalSize : 0;
+      // Establecer nueva portada
+      return await Media.findByIdAndUpdate(
+        mediaId,
+        { esPortada: true },
+        { new: true }
+      );
     } catch (error) {
-      throw new Error(`Error calculando almacenamiento: ${error.message}`);
+      throw error;
     }
   }
 
   /**
-   * Obtener estadísticas de media por perfil
+   * Obtener portada de un memorial
    */
-  async getMediaStats(profileId) {
+  async getPortada(memorialId, tipo = 'foto') {
+    try {
+      return await Media.findOne({
+        memorial: memorialId,
+        tipo,
+        esPortada: true,
+        estaActivo: true
+      }).lean();
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Contar media por memorial y tipo
+   */
+  async countByMemorial(memorialId, tipo = null) {
+    try {
+      const filtro = { 
+        memorial: memorialId,
+        estaActivo: true
+      };
+      
+      if (tipo) {
+        filtro.tipo = tipo;
+      }
+      
+      return await Media.countDocuments(filtro);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener estadísticas de media
+   */
+  async getStats(memorialId) {
     try {
       const stats = await Media.aggregate([
         {
-          $match: { 
-            perfil: profileId,
-            estado: 'completado'
+          $match: {
+            memorial: memorialId,
+            estaActivo: true
           }
         },
         {
           $group: {
             _id: '$tipo',
             count: { $sum: 1 },
-            totalSize: { $sum: '$archivo.tamaño' }
+            totalSize: { $sum: '$archivo.tamaño' },
+            totalVistas: { $sum: '$estadisticas.vistas' }
           }
         }
       ]);
 
-      // Formatear respuesta
       const result = {
-        fotos: { count: 0, totalSize: 0 },
-        videos: { count: 0, totalSize: 0 }
+        total: 0,
+        fotos: 0,
+        videos: 0,
+        tamañoTotal: 0,
+        vistasTotal: 0
       };
 
       stats.forEach(stat => {
+        result.total += stat.count;
+        result.tamañoTotal += stat.totalSize;
+        result.vistasTotal += stat.totalVistas;
+        
         if (stat._id === 'foto') {
-          result.fotos = { count: stat.count, totalSize: stat.totalSize };
+          result.fotos = stat.count;
         } else if (stat._id === 'video') {
-          result.videos = { count: stat.count, totalSize: stat.totalSize };
+          result.videos = stat.count;
         }
       });
 
       return result;
     } catch (error) {
-      throw new Error(`Error obteniendo estadísticas: ${error.message}`);
+      throw error;
     }
   }
 
   /**
-   * Buscar media por sección para display público
+   * Buscar media por texto
    */
-  async findBySection(profileId, seccion) {
+  async search(memorialId, searchTerm, options = {}) {
+    try {
+      const {
+        tipo = null,
+        page = 1,
+        limit = 50
+      } = options;
+
+      const filtro = {
+        memorial: memorialId,
+        estaActivo: true,
+        $or: [
+          { titulo: { $regex: searchTerm, $options: 'i' } },
+          { descripcion: { $regex: searchTerm, $options: 'i' } },
+          { 'archivo.nombreOriginal': { $regex: searchTerm, $options: 'i' } }
+        ]
+      };
+
+      if (tipo) {
+        filtro.tipo = tipo;
+      }
+
+      const skip = (page - 1) * limit;
+
+      const media = await Media.find(filtro)
+        .sort({ orden: 1, createdAt: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      const total = await Media.countDocuments(filtro);
+
+      return {
+        media,
+        total,
+        searchTerm,
+        page,
+        limit
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Incrementar vistas
+   */
+  async incrementViews(mediaId) {
+    try {
+      return await Media.findByIdAndUpdate(
+        mediaId,
+        { $inc: { 'estadisticas.vistas': 1 } },
+        { new: true }
+      );
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener media reciente
+   */
+  async getRecent(memorialId, limit = 10) {
     try {
       return await Media.find({
-        perfil: profileId,
-        seccion,
-        estado: 'completado'
-      }).sort({ orden: 1, createdAt: -1 });
+        memorial: memorialId,
+        estaActivo: true
+      })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
     } catch (error) {
-      throw new Error(`Error buscando media por sección: ${error.message}`);
+      throw error;
     }
   }
 
   /**
-   * Actualizar orden de media en una sección
+   * Verificar si un memorial tiene media
    */
-  async updateOrder(mediaIds, orders) {
+  async hasMedia(memorialId, tipo = null) {
     try {
-      const bulkOps = mediaIds.map((id, index) => ({
-        updateOne: {
-          filter: { _id: id },
-          update: { orden: orders[index] }
-        }
-      }));
-
-      return await Media.bulkWrite(bulkOps);
+      const filtro = { 
+        memorial: memorialId,
+        estaActivo: true
+      };
+      
+      if (tipo) {
+        filtro.tipo = tipo;
+      }
+      
+      const count = await Media.countDocuments(filtro);
+      return count > 0;
     } catch (error) {
-      throw new Error(`Error actualizando orden: ${error.message}`);
+      throw error;
     }
   }
 }

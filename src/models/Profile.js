@@ -107,6 +107,22 @@ const profileSchema = new mongoose.Schema({
     required: [true, 'El cliente es requerido']
   },
   
+  // Sistema de comentarios
+  codigoComentarios: {
+    type: String,
+    trim: true,
+    maxlength: [50, 'El código no puede exceder 50 caracteres'],
+    default: ''
+  },
+  comentariosHabilitados: {
+    type: Boolean,
+    default: true
+  },
+  fechaLimiteComentarios: {
+    type: Date,
+    default: null // null = sin límite
+  },
+  
   // Estado
   isPublic: {
     type: Boolean,
@@ -125,7 +141,36 @@ profileSchema.index({ cliente: 1, isActive: 1 });
 profileSchema.index({ qr: 1 });
 profileSchema.index({ 'fechaNacimiento': 1, 'fechaFallecimiento': 1 });
 
-// Virtual para calcular edad al fallecer
+// Método para validar código de comentarios
+profileSchema.methods.validarCodigoComentarios = function(codigo) {
+  if (!this.comentariosHabilitados) {
+    return { valido: false, mensaje: 'Los comentarios están deshabilitados' };
+  }
+  
+  if (this.fechaLimiteComentarios && new Date() > this.fechaLimiteComentarios) {
+    return { valido: false, mensaje: 'El período para comentar ha expirado' };
+  }
+  
+  if (!this.codigoComentarios) {
+    return { valido: false, mensaje: 'No hay código de comentarios configurado' };
+  }
+  
+  if (this.codigoComentarios.toLowerCase() !== codigo.toLowerCase()) {
+    return { valido: false, mensaje: 'Código incorrecto' };
+  }
+  
+  return { valido: true, mensaje: 'Código válido' };
+};
+
+// Método para generar código automático
+profileSchema.methods.generarCodigoComentarios = function() {
+  const nombre = this.nombre.split(' ')[0].toUpperCase();
+  const year = this.fechaFallecimiento.getFullYear();
+  const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+  return `${nombre}-${year}-${random}`;
+};
+
+
 profileSchema.virtual('edadAlFallecer').get(function() {
   if (this.fechaNacimiento && this.fechaFallecimiento) {
     const diffTime = Math.abs(this.fechaFallecimiento - this.fechaNacimiento);

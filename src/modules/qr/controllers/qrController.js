@@ -121,15 +121,28 @@ class QRController {
       
       // Obtener datos del memorial usando el profile service
       const profileService = require('../../profiles/services/profileService');
+      const comentarioService = require('../../comentarios/services/comentarioService');
       
       try {
         // Usar el ID de la referencia (profileId) no el objeto completo
         const profileId = qr.referencia && qr.referencia._id ? qr.referencia._id : qr.referencia;
         const memorial = await profileService.getPublicMemorial(profileId);
         
-        // Retornar datos del memorial
+        // Obtener comentarios del memorial
+        const comentariosData = await comentarioService.getComentariosPublicos(profileId, {
+          page: 1,
+          limit: 50,
+          sortOrder: 'desc'
+        });
+        
+        // Obtener configuración de comentarios
+        const configComentarios = await comentarioService.getConfiguracionPublica(profileId);
+        
+        // Retornar datos del memorial completo
         responseHelper.success(res, {
           memorial,
+          comentarios: comentariosData.comentarios,
+          configuracionComentarios: configComentarios,
           qr: {
             code: qr.code,
             tipo: qr.tipo,
