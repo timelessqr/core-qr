@@ -135,6 +135,12 @@ const profileSchema = new mongoose.Schema({
     maxlength: [50, 'El código no puede exceder 50 caracteres'],
     default: ''
   },
+  codigoCliente: {
+    type: String,
+    trim: true,
+    maxlength: [50, 'El código de cliente no puede exceder 50 caracteres'],
+    default: ''
+  },
   comentariosHabilitados: {
     type: Boolean,
     default: true
@@ -172,23 +178,43 @@ profileSchema.methods.validarCodigoComentarios = function(codigo) {
     return { valido: false, mensaje: 'El período para comentar ha expirado' };
   }
   
-  if (!this.codigoComentarios) {
-    return { valido: false, mensaje: 'No hay código de comentarios configurado' };
+  // Validar código de cliente (permisos completos)
+  if (this.codigoCliente && this.codigoCliente.toLowerCase() === codigo.toLowerCase()) {
+    return { 
+      valido: true, 
+      mensaje: 'Código de cliente válido',
+      nivel: 'cliente',
+      permisos: ['comentar', 'responder']
+    };
   }
   
-  if (this.codigoComentarios.toLowerCase() !== codigo.toLowerCase()) {
-    return { valido: false, mensaje: 'Código incorrecto' };
+  // Validar código familiar (solo comentar)
+  if (this.codigoComentarios && this.codigoComentarios.toLowerCase() === codigo.toLowerCase()) {
+    return { 
+      valido: true, 
+      mensaje: 'Código familiar válido',
+      nivel: 'familiar',
+      permisos: ['comentar']
+    };
   }
   
-  return { valido: true, mensaje: 'Código válido' };
+  return { valido: false, mensaje: 'Código incorrecto' };
 };
 
-// Método para generar código automático
+// Método para generar código automático familiar
 profileSchema.methods.generarCodigoComentarios = function() {
   const nombre = this.nombre.split(' ')[0].toUpperCase();
   const year = this.fechaFallecimiento.getFullYear();
   const random = Math.random().toString(36).substring(2, 5).toUpperCase();
-  return `${nombre}-${year}-${random}`;
+  return `FAMILIA-${year}-${random}`;
+};
+
+// Método para generar código automático de cliente
+profileSchema.methods.generarCodigoCliente = function() {
+  const nombre = this.nombre.split(' ')[0].toUpperCase();
+  const year = this.fechaFallecimiento.getFullYear();
+  const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+  return `CLIENTE-${year}-${random}`;
 };
 
 

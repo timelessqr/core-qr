@@ -11,11 +11,17 @@ class ProfileRepository {
     }
   }
   
-  async findById(id) {
-    return await Profile.findById(id)
+  async findById(id, withMethods = false) {
+    const query = Profile.findById(id)
       .populate('cliente', 'nombre apellido codigoCliente telefono email')
-      .populate('qr')
-      .lean();
+      .populate('qr');
+    
+    // Si necesitamos los métodos del schema, no usar .lean()
+    if (withMethods) {
+      return await query;
+    } else {
+      return await query.lean();
+    }
   }
   
   async findByClientId(clientId) {

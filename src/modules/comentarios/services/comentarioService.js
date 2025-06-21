@@ -20,7 +20,8 @@ class ComentarioService {
       }
 
       const profileId = qr.referencia && qr.referencia._id ? qr.referencia._id : qr.referencia;
-      const profile = await profileRepository.findById(profileId);
+      // Obtener el profile CON los métodos del schema (withMethods = true)
+      const profile = await profileRepository.findById(profileId, true);
       
       if (!profile) {
         throw new Error('Memorial no encontrado');
@@ -36,6 +37,8 @@ class ComentarioService {
             profileId: profile._id,
             qrCode: qrCode,
             codigo: codigo,
+            nivel: validacion.nivel,
+            permisos: validacion.permisos,
             type: 'comment_token'
           },
           process.env.JWT_SECRET,
@@ -46,6 +49,8 @@ class ComentarioService {
           valido: true,
           mensaje: validacion.mensaje,
           token,
+          nivel: validacion.nivel,
+          permisos: validacion.permisos,
           memorialNombre: profile.nombre
         };
       } else {
@@ -173,18 +178,28 @@ class ComentarioService {
    */
   async configurarCodigoComentarios(profileId, configuracion, adminId) {
     try {
-      const profile = await profileRepository.findById(profileId);
+      const profile = await profileRepository.findById(profileId, true);
       if (!profile) {
         throw new Error('Memorial no encontrado');
       }
 
       const updates = {};
       
+      // Actualizar código familiar
       if (configuracion.codigoComentarios !== undefined) {
         if (configuracion.codigoComentarios && configuracion.codigoComentarios.trim().length > 0) {
           updates.codigoComentarios = configuracion.codigoComentarios.trim();
         } else {
           updates.codigoComentarios = '';
+        }
+      }
+      
+      // Actualizar código de cliente
+      if (configuracion.codigoCliente !== undefined) {
+        if (configuracion.codigoCliente && configuracion.codigoCliente.trim().length > 0) {
+          updates.codigoCliente = configuracion.codigoCliente.trim();
+        } else {
+          updates.codigoCliente = '';
         }
       }
 
@@ -201,6 +216,7 @@ class ComentarioService {
 
       return {
         codigoComentarios: updatedProfile.codigoComentarios,
+        codigoCliente: updatedProfile.codigoCliente,
         comentariosHabilitados: updatedProfile.comentariosHabilitados,
         fechaLimiteComentarios: updatedProfile.fechaLimiteComentarios,
         mensaje: 'Configuración de comentarios actualizada'
@@ -215,7 +231,8 @@ class ComentarioService {
    */
   async generarCodigoAutomatico(profileId, adminId) {
     try {
-      const profile = await profileRepository.findById(profileId);
+      // Obtener el profile CON los métodos del schema (withMethods = true)
+      const profile = await profileRepository.findById(profileId, true);
       if (!profile) {
         throw new Error('Memorial no encontrado');
       }
@@ -259,7 +276,8 @@ class ComentarioService {
    */
   async getConfiguracionPublica(profileId) {
     try {
-      const profile = await profileRepository.findById(profileId);
+      // Obtener el profile CON los métodos del schema (withMethods = true)
+      const profile = await profileRepository.findById(profileId, true);
       if (!profile) {
         throw new Error('Memorial no encontrado');
       }

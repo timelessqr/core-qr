@@ -22,7 +22,9 @@ connectDB().catch(err => {
 app.use(cors({
   origin: [
     'http://localhost:5173',      // Para desarrollo local
+    'http://localhost:5174',      // Para desarrollo local - puerto alternativo
     'http://192.168.1.34:5173',   // Para acceso desde red local (móvil)
+    'http://192.168.1.34:5174',   // Para acceso desde red local - puerto alternativo
     process.env.FRONTEND_URL      // URL del .env como backup
   ].filter(Boolean), // Filtrar valores undefined
   credentials: true
