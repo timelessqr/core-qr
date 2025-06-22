@@ -318,15 +318,18 @@ class ComentarioRepository {
   }
 
   /**
-   * Eliminar comentario (soft delete)
+   * 🔧 ARREGLADO: Eliminar comentario (hard delete)
    */
   async delete(comentarioId) {
     try {
-      return await Comentario.findByIdAndUpdate(
-        comentarioId,
-        { estado: 'eliminado' },
-        { new: true }
-      );
+      // Primero eliminar todas las respuestas hijas si es un comentario principal
+      await Comentario.deleteMany({
+        comentarioPadre: comentarioId,
+        esRespuesta: true
+      });
+      
+      // Luego eliminar el comentario principal
+      return await Comentario.findByIdAndDelete(comentarioId);
     } catch (error) {
       throw error;
     }
