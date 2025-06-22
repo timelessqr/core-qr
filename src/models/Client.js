@@ -71,7 +71,6 @@ const clientSchema = new mongoose.Schema({
 });
 
 // Índices
-clientSchema.index({ codigoCliente: 1 });
 clientSchema.index({ telefono: 1 });
 clientSchema.index({ email: 1 });
 clientSchema.index({ apellido: 1, nombre: 1 });
@@ -87,29 +86,30 @@ clientSchema.pre('save', async function(next) {
     
     do {
       attempts++;
-      // Buscar el último código existente
-      const lastClient = await this.constructor.findOne(
+      
+      // Buscar todos los códigos existentes y encontrar el próximo número
+      const existingClients = await this.constructor.find(
         { codigoCliente: { $regex: /^CL-\d+$/ } },
         { codigoCliente: 1 }
-      ).sort({ codigoCliente: -1 }).lean();
+      ).lean();
       
-      let nextNumber = 1;
-      if (lastClient) {
-        const lastNumber = parseInt(lastClient.codigoCliente.replace('CL-', ''));
-        nextNumber = lastNumber + 1;
-      }
+      // Extraer números y encontrar el máximo
+      const numbers = existingClients.map(client => {
+        const match = client.codigoCliente.match(/^CL-(\d+)$/);
+        return match ? parseInt(match[1]) : 0;
+      });
+      
+      const maxNumber = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const nextNumber = maxNumber + 1;
       
       codigoGenerado = `CL-${String(nextNumber).padStart(3, '0')}`;
       
-      // Verificar si ya existe
+      // Verificar si ya existe (doble verificación)
       const exists = await this.constructor.findOne({ codigoCliente: codigoGenerado });
       if (!exists) {
         this.codigoCliente = codigoGenerado;
         break;
       }
-      
-      // Si existe, intentar con el siguiente número
-      nextNumber++;
       
     } while (attempts < maxAttempts);
     
