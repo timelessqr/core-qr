@@ -3,6 +3,7 @@
 // ====================================
 const clientRepository = require('../../clients/repositories/clientRepository');
 const profileRepository = require('../../profiles/repositories/profileRepository');
+const qrRepository = require('../../qr/repositories/qrRepository');
 const profileService = require('../../profiles/services/profileService');
 const clientService = require('../../clients/services/clientService');
 
@@ -223,45 +224,82 @@ class AdminService {
    */
   async getSystemMetrics() {
     try {
-      const now = new Date();
-      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-
       const [
-        totalClients,
-        totalProfiles,
-        clientsThisMonth,
-        profilesThisMonth,
-        clientsLastMonth,
-        profilesLastMonth
+        clientStats,
+        profileStats,
+        qrMetrics
       ] = await Promise.all([
         clientRepository.getStats(),
         profileRepository.getGeneralStats(),
-        // Aquí podrían ir consultas más específicas para métricas avanzadas
-        clientRepository.getStats(), // Simplificado por ahora
-        profileRepository.getGeneralStats(),
-        clientRepository.getStats(),
-        profileRepository.getGeneralStats()
+        this.getQRMetrics()
       ]);
 
       return {
         totales: {
-          clientes: totalClients.total || 0,
-          memoriales: totalProfiles.total || 0,
-          qrsGenerados: totalProfiles.total || 0 // Asumiendo 1:1
+          clientes: clientStats.total || 0,
+          memoriales: profileStats.total || 0,
+          qrsGenerados: qrMetrics.totalQRs || 0
         },
         tendencias: {
-          clientesEsteMes: totalClients.registradosEsteMes || 0,
-          memorialesEsteMes: totalProfiles.creadosEsteMes || 0,
+          clientesEsteMes: clientStats.registradosEsteMes || 0,
+          memorialesEsteMes: profileStats.creadosEsteMes || 0,
           crecimiento: {
-            clientes: this.calculateGrowth(clientsThisMonth.registradosEsteMes || 0, clientsLastMonth.registradosEsteMes || 0),
-            memoriales: this.calculateGrowth(profilesThisMonth.creadosEsteMes || 0, profilesLastMonth.creadosEsteMes || 0)
+            clientes: this.calculateGrowth(clientStats.registradosEsteMes || 0, 0), // Simplificado
+            memoriales: this.calculateGrowth(profileStats.creadosEsteMes || 0, 0) // Simplificado
           }
-        }
+        },
+        qr: qrMetrics // Incluir métricas específicas de QR
       };
 
     } catch (error) {
       throw new Error(`Error obteniendo métricas: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Obtener métricas específicas de QR
+   */
+  async getQRMetrics() {
+    try {
+      const QR = require('../../../models/QR');
+      
+      const [
+        totalQRs,
+        totalScans,
+        activeQRs,
+        mostScannedQR
+      ] = await Promise.all([
+        QR.countDocuments({ isActive: true }),
+        QR.aggregate([
+          { $match: { isActive: true } },
+          { $group: { _id: null, total: { $sum: '$estadisticas.escaneos' } } }
+        ]),
+        QR.countDocuments({ isActive: true }),
+        QR.findOne(
+          { isActive: true },
+          null,
+          { sort: { 'estadisticas.escaneos': -1 } }
+        ).populate('referenciaId', 'nombre')
+      ]);
+      
+      return {
+        totalQRs,
+        totalScans: totalScans[0]?.total || 0,
+        activeQRs,
+        mostScanned: mostScannedQR ? {
+          code: mostScannedQR.code,
+          nombre: mostScannedQR.referenciaId?.nombre || 'N/A',
+          escaneos: mostScannedQR.estadisticas?.escaneos || 0
+        } : null
+      };
+    } catch (error) {
+      console.error('Error obteniendo métricas de QR:', error);
+      return {
+        totalQRs: 0,
+        totalScans: 0,
+        activeQRs: 0,
+        mostScanned: null
+      };
     }
   }
 

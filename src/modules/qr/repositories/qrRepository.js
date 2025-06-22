@@ -42,6 +42,53 @@ class QRRepository {
     .sort({ createdAt: -1 });
   }
   
+  async findAllWithPagination({ page = 1, limit = 50, search = '' } = {}) {
+    try {
+      const skip = (page - 1) * limit;
+      
+      // Construir filtro de búsqueda
+      let filter = { isActive: true };
+      
+      if (search) {
+        filter.$or = [
+          { code: { $regex: search, $options: 'i' } },
+          { url: { $regex: search, $options: 'i' } }
+        ];
+      }
+      
+      // Obtener datos con paginación
+      const [data, total] = await Promise.all([
+        QR.find(filter)
+          .populate({
+            path: 'referenciaId',
+            select: 'nombre apellido fechaNacimiento fechaFallecimiento'
+          })
+          .populate('creadoPor', 'nombre email')
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit),
+        QR.countDocuments(filter)
+      ]);
+      
+      // Calcular metadatos de paginación
+      const totalPages = Math.ceil(total / limit);
+      const hasNextPage = page < totalPages;
+      const hasPrevPage = page > 1;
+      
+      return {
+        data,
+        total,
+        totalPages,
+        currentPage: page,
+        hasNextPage,
+        hasPrevPage,
+        limit
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+  
   async updateStats(qrId, statsUpdate) {
     return await QR.findByIdAndUpdate(
       qrId,

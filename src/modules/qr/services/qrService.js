@@ -115,6 +115,45 @@ class QRService {
     }
   }
   
+  async getAllQRs(options = {}) {
+    try {
+      const { page = 1, limit = 50, search = '' } = options;
+      
+      const result = await qrRepository.findAllWithPagination({
+        page,
+        limit,
+        search
+      });
+      
+      const qrs = result.data.map(qr => ({
+        id: qr._id,
+        code: qr.code,
+        url: qr.url,
+        tipo: qr.tipo,
+        referencia: qr.referenciaId,
+        estado: qr.estado || 'activo',
+        fechaCreacion: qr.createdAt,
+        estadisticas: {
+          vistas: qr.estadisticas?.vistas || 0,
+          escaneos: qr.estadisticas?.escaneos || 0,
+          ultimaVisita: qr.estadisticas?.ultimaVisita
+        },
+        createdAt: qr.createdAt
+      }));
+      
+      return {
+        qrs,
+        totalQRs: result.total,
+        totalPages: result.totalPages,
+        currentPage: result.currentPage,
+        hasNextPage: result.hasNextPage,
+        hasPrevPage: result.hasPrevPage
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+  
   async getUserQRs(userId) {
     try {
       const qrs = await qrRepository.findByUserId(userId);

@@ -10,6 +10,9 @@ const router = express.Router();
 // Rutas protegidas (requieren autenticación)
 router.use(authMiddleware);
 
+// Obtener todos los QRs (para admin)
+router.get('/', qrController.getAllQRs);
+
 // Generar QR para un perfil
 router.post('/generate/:profileId', qrController.generateForProfile);
 

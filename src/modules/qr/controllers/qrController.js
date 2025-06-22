@@ -36,6 +36,25 @@ class QRController {
     }
   }
   
+  async getAllQRs(req, res) {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 50;
+      const search = req.query.search || '';
+      
+      const result = await qrService.getAllQRs({
+        page,
+        limit,
+        search
+      });
+      
+      responseHelper.success(res, result, 'QRs obtenidos exitosamente');
+    } catch (error) {
+      console.error('Error obteniendo todos los QRs:', error);
+      responseHelper.error(res, error.message, 400);
+    }
+  }
+  
   async getUserQRs(req, res) {
     try {
       const userId = req.user.id;
