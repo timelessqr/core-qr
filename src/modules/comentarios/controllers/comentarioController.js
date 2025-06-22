@@ -200,6 +200,24 @@ class ComentarioController {
   }
 
   /**
+   * 🆕 Generar solo código de cliente (admin)
+   * POST /api/admin/profiles/:profileId/generar-codigo-cliente
+   */
+  async generarCodigoCliente(req, res) {
+    try {
+      const { profileId } = req.params;
+      const adminId = req.user.id;
+
+      const resultado = await comentarioService.generarCodigoCliente(profileId, adminId);
+
+      responseHelper.success(res, resultado, 'Código de cliente generado exitosamente');
+    } catch (error) {
+      console.error('Error generando código de cliente:', error);
+      responseHelper.error(res, error.message, 400);
+    }
+  }
+
+  /**
    * Obtener comentarios para admin
    * GET /api/admin/profiles/:profileId/comentarios
    */

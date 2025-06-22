@@ -373,6 +373,32 @@ class ComentarioService {
   }
 
   /**
+   * 🆕 Generar solo código de cliente
+   */
+  async generarCodigoCliente(profileId, adminId) {
+    try {
+      // Obtener el profile CON los métodos del schema (withMethods = true)
+      const profile = await profileRepository.findById(profileId, true);
+      if (!profile) {
+        throw new Error('Memorial no encontrado');
+      }
+
+      const nuevoCodigoCliente = profile.generarCodigoCliente();
+      
+      const updatedProfile = await profileRepository.update(profileId, {
+        codigoCliente: nuevoCodigoCliente
+      });
+
+      return {
+        codigoCliente: nuevoCodigoCliente,
+        mensaje: 'Código de cliente generado automáticamente'
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
    * Buscar comentarios
    */
   async buscarComentarios(profileId, searchTerm, options = {}) {

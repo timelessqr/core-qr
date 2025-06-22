@@ -67,6 +67,12 @@ router.put('/admin/profiles/:profileId/codigo-comentarios', comentarioController
 router.post('/admin/profiles/:profileId/generar-codigo', comentarioController.generarCodigoAutomatico);
 
 /**
+ * 🆕 Generar solo código de cliente
+ * POST /api/admin/profiles/:profileId/generar-codigo-cliente
+ */
+router.post('/admin/profiles/:profileId/generar-codigo-cliente', comentarioController.generarCodigoCliente);
+
+/**
  * Obtener comentarios para admin
  * GET /api/admin/profiles/:profileId/comentarios
  */
