@@ -5,12 +5,38 @@ const Comentario = require('../../../models/Comentario');
 
 class ComentarioRepository {
   /**
-   * Crear un nuevo comentario
+   * Crear un nuevo comentario o respuesta
    */
   async create(comentarioData) {
     try {
       const comentario = new Comentario(comentarioData);
       return await comentario.save();
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 Incrementar likes de un comentario
+   */
+  async incrementLikes(comentarioId) {
+    try {
+      return await Comentario.findByIdAndUpdate(
+        comentarioId,
+        { $inc: { likes: 1 } }, // Incrementar likes en 1
+        { new: true } // Devolver el documento actualizado
+      );
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 Obtener comentarios públicos con respuestas anidadas (usa el método del modelo)
+   */
+  async getPublicCommentsWithReplies(memorialId, options = {}) {
+    try {
+      return await Comentario.getCommentsWithReplies(memorialId, options);
     } catch (error) {
       throw error;
     }
@@ -33,9 +59,11 @@ class ComentarioRepository {
 
       const skip = (page - 1) * limit;
 
+      // 🆕 Solo obtener comentarios principales (no respuestas)
       const comentarios = await Comentario.find({
         memorial: memorialId,
-        estado: 'activo'
+        estado: 'activo',
+        esRespuesta: false
       })
       .sort(sort)
       .skip(skip)
@@ -47,6 +75,8 @@ class ComentarioRepository {
         nombre: comentario.nombre,
         mensaje: comentario.mensaje,
         relacion: comentario.relacion,
+        nivelUsuario: comentario.nivelUsuario,
+        esRespuesta: comentario.esRespuesta,
         fechaCreacion: comentario.createdAt,
         fechaRelativa: this.getFechaRelativa(comentario.createdAt)
       }));
@@ -94,13 +124,29 @@ class ComentarioRepository {
   }
 
   /**
-   * Contar comentarios de un memorial
+   * Contar comentarios principales de un memorial (sin respuestas)
    */
   async countByMemorial(memorialId, estado = 'activo') {
     try {
       return await Comentario.countDocuments({
         memorial: memorialId,
-        estado
+        estado,
+        esRespuesta: false // 🆕 Solo contar comentarios principales
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 Contar respuestas de un comentario específico
+   */
+  async countRepliesByComment(comentarioId) {
+    try {
+      return await Comentario.countDocuments({
+        comentarioPadre: comentarioId,
+        estado: 'activo',
+        esRespuesta: true
       });
     } catch (error) {
       throw error;

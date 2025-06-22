@@ -24,6 +24,8 @@ class ComentarioController {
         responseHelper.success(res, {
           valido: true,
           token: resultado.token,
+          nivel: resultado.nivel, // 🆕 Incluir nivel en respuesta
+          permisos: resultado.permisos, // 🆕 Incluir permisos en respuesta
           memorialNombre: resultado.memorialNombre
         }, resultado.mensaje);
       } else {
@@ -67,6 +69,63 @@ class ComentarioController {
   }
 
   /**
+   * 🆕 Crear respuesta a un comentario (público con token nivel 'cliente')
+   * POST /api/memorial/:qrCode/comentarios/:comentarioId/responder
+   */
+  async crearRespuesta(req, res) {
+    try {
+      const { qrCode, comentarioId } = req.params;
+      const { nombre, mensaje, relacion, token } = req.body;
+
+      if (!token) {
+        return responseHelper.error(res, 'Token de validación requerido', 400);
+      }
+
+      if (!comentarioId) {
+        return responseHelper.error(res, 'ID del comentario padre requerido', 400);
+      }
+
+      const reqInfo = {
+        ip: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent') || 'Unknown'
+      };
+
+      const respuesta = await comentarioService.crearRespuesta(
+        comentarioId,
+        { nombre, mensaje, relacion },
+        token,
+        reqInfo
+      );
+
+      responseHelper.success(res, respuesta, 'Respuesta publicada exitosamente', 201);
+    } catch (error) {
+      console.error('Error creando respuesta:', error);
+      responseHelper.error(res, error.message, 400);
+    }
+  }
+
+  /**
+   * 🆕 Dar like a un comentario (público)
+   * POST /api/memorial/:qrCode/comentarios/:comentarioId/like
+   */
+  async darLike(req, res) {
+    try {
+      const { comentarioId } = req.params;
+
+      if (!comentarioId) {
+        return responseHelper.error(res, 'ID del comentario requerido', 400);
+      }
+
+      const resultado = await comentarioService.darLike(comentarioId);
+
+      responseHelper.success(res, resultado, 'Like agregado exitosamente');
+    } catch (error) {
+      console.error('Error dando like:', error);
+      responseHelper.error(res, error.message, 400);
+    }
+  }
+
+  /**
    * Obtener comentarios públicos de un memorial
    * GET /api/memorial/:qrCode/comentarios
    */
@@ -85,7 +144,8 @@ class ComentarioController {
 
       const profileId = qr.referencia && qr.referencia._id ? qr.referencia._id : qr.referencia;
       
-      const resultado = await comentarioService.getComentariosPublicos(profileId, {
+      // 🆕 Usar el nuevo método que incluye respuestas anidadas
+      const resultado = await comentarioService.getComentariosConRespuestas(profileId, {
         page: parseInt(page),
         limit: parseInt(limit),
         sortOrder

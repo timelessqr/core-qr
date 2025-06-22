@@ -34,6 +34,30 @@ const comentarioSchema = new mongoose.Schema({
     required: [true, 'El código de validación es requerido'],
     trim: true
   },
+  
+  // 🆕 NUEVOS CAMPOS PARA RESPUESTAS
+  esRespuesta: {
+    type: Boolean,
+    default: false
+  },
+  comentarioPadre: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Comentario',
+    default: null
+  },
+  nivelUsuario: {
+    type: String,
+    enum: ['familiar', 'cliente'],
+    required: [true, 'El nivel de usuario es requerido']
+  },
+  
+  // 🆕 CAMPO PARA LOS "ME GUSTA"
+  likes: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  
   estado: {
     type: String,
     enum: ['activo', 'eliminado'],
@@ -55,6 +79,8 @@ const comentarioSchema = new mongoose.Schema({
 comentarioSchema.index({ memorial: 1, estado: 1 });
 comentarioSchema.index({ createdAt: -1 });
 comentarioSchema.index({ memorial: 1, createdAt: -1 });
+comentarioSchema.index({ comentarioPadre: 1, esRespuesta: 1 }); // 🆕 Para respuestas
+comentarioSchema.index({ memorial: 1, esRespuesta: 1 }); // 🆕 Para filtrar comentarios principales
 
 // Método para formatear comentario para vista pública
 comentarioSchema.methods.toPublicJSON = function() {
@@ -63,6 +89,10 @@ comentarioSchema.methods.toPublicJSON = function() {
     nombre: this.nombre,
     mensaje: this.mensaje,
     relacion: this.relacion,
+    esRespuesta: this.esRespuesta,
+    comentarioPadre: this.comentarioPadre,
+    nivelUsuario: this.nivelUsuario,
+    likes: this.likes || 0, // 🆕 Incluir likes
     fechaCreacion: this.createdAt,
     fechaRelativa: this.getFechaRelativa()
   };
@@ -92,7 +122,41 @@ comentarioSchema.methods.getFechaRelativa = function() {
   }
 };
 
-// Método estático para obtener comentarios públicos de un memorial
+// 🆕 Método estático para obtener comentarios principales con respuestas
+comentarioSchema.statics.getCommentsWithReplies = async function(memorialId, options = {}) {
+  const { page = 1, limit = 10, sortOrder = 'desc' } = options;
+  const skip = (page - 1) * limit;
+  
+  // Obtener comentarios principales (no son respuestas)
+  const comentariosPrincipales = await this.find({
+    memorial: memorialId,
+    estado: 'activo',
+    esRespuesta: false
+  })
+  .sort({ createdAt: sortOrder === 'desc' ? -1 : 1 })
+  .skip(skip)
+  .limit(limit);
+
+  // Para cada comentario principal, obtener sus respuestas
+  const comentariosConRespuestas = await Promise.all(
+    comentariosPrincipales.map(async (comentario) => {
+      const respuestas = await this.find({
+        comentarioPadre: comentario._id,
+        estado: 'activo',
+        esRespuesta: true
+      }).sort({ createdAt: 1 }); // Respuestas en orden cronológico
+
+      return {
+        ...comentario.toPublicJSON(),
+        respuestas: respuestas.map(r => r.toPublicJSON())
+      };
+    })
+  );
+
+  return comentariosConRespuestas;
+};
+
+// Método estático para obtener comentarios públicos de un memorial (versión legacy)
 comentarioSchema.statics.getPublicComments = async function(memorialId) {
   return this.find({
     memorial: memorialId,
@@ -102,12 +166,28 @@ comentarioSchema.statics.getPublicComments = async function(memorialId) {
   .limit(100); // Máximo 100 comentarios
 };
 
-// Método estático para contar comentarios de un memorial
+// Método estático para contar comentarios de un memorial (solo principales)
 comentarioSchema.statics.countByMemorial = async function(memorialId) {
   return this.countDocuments({
     memorial: memorialId,
-    estado: 'activo'
+    estado: 'activo',
+    esRespuesta: false // 🆕 Solo contar comentarios principales
   });
+};
+
+// 🆕 Método estático para contar respuestas de un comentario
+comentarioSchema.statics.countRepliesByComment = async function(comentarioId) {
+  return this.countDocuments({
+    comentarioPadre: comentarioId,
+    estado: 'activo',
+    esRespuesta: true
+  });
+};
+
+// 🆕 Método para validar si se puede responder a un comentario
+comentarioSchema.methods.puedeResponder = function() {
+  // Solo se puede responder a comentarios principales (no a respuestas de respuestas)
+  return !this.esRespuesta;
 };
 
 module.exports = mongoose.model('Comentario', comentarioSchema);

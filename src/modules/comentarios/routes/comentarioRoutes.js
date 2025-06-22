@@ -24,6 +24,18 @@ router.post('/memorial/:qrCode/validar-codigo', comentarioController.validarCodi
 router.post('/memorial/:qrCode/comentarios', comentarioController.crearComentario);
 
 /**
+ * 🆕 Crear respuesta a un comentario (requiere token de validación y nivel 'cliente')
+ * POST /api/memorial/:qrCode/comentarios/:comentarioId/responder
+ */
+router.post('/memorial/:qrCode/comentarios/:comentarioId/responder', comentarioController.crearRespuesta);
+
+/**
+ * 🆕 Dar like a un comentario (público)
+ * POST /api/memorial/:qrCode/comentarios/:comentarioId/like
+ */
+router.post('/memorial/:qrCode/comentarios/:comentarioId/like', comentarioController.darLike);
+
+/**
  * Obtener comentarios públicos
  * GET /api/memorial/:qrCode/comentarios
  */

@@ -31,7 +31,7 @@ class ComentarioService {
       const validacion = profile.validarCodigoComentarios(codigo);
       
       if (validacion.valido) {
-        // Generar token temporal para comentar (válido por 30 minutos)
+        // Generar token temporal para comentar (válido por 2 minutos)
         const token = jwt.sign(
           { 
             profileId: profile._id,
@@ -42,7 +42,7 @@ class ComentarioService {
             type: 'comment_token'
           },
           process.env.JWT_SECRET,
-          { expiresIn: '30m' }
+          { expiresIn: '2m' } // 🆕 Cambiado a 2 minutos
         );
 
         return {
@@ -56,6 +56,33 @@ class ComentarioService {
       } else {
         return validacion;
       }
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 Dar like a un comentario
+   */
+  async darLike(comentarioId) {
+    try {
+      const comentario = await comentarioRepository.findById(comentarioId);
+      if (!comentario) {
+        throw new Error('Comentario no encontrado');
+      }
+
+      if (comentario.estado !== 'activo') {
+        throw new Error('No se puede dar like a un comentario eliminado');
+      }
+
+      // Incrementar likes
+      const comentarioActualizado = await comentarioRepository.incrementLikes(comentarioId);
+
+      return {
+        id: comentarioActualizado._id,
+        likes: comentarioActualizado.likes,
+        mensaje: 'Like agregado correctamente'
+      };
     } catch (error) {
       throw error;
     }
@@ -87,13 +114,16 @@ class ComentarioService {
         throw new Error('El mensaje es requerido (mínimo 5 caracteres)');
       }
 
-      // Crear comentario
+      // Crear comentario principal
       const nuevoComentario = await comentarioRepository.create({
         memorial: tokenData.profileId,
         nombre: comentarioData.nombre.trim(),
         mensaje: comentarioData.mensaje.trim(),
         relacion: comentarioData.relacion ? comentarioData.relacion.trim() : '',
         codigoUsado: tokenData.codigo,
+        nivelUsuario: tokenData.nivel, // 🆕 Guardar el nivel del usuario
+        esRespuesta: false, // 🆕 Es un comentario principal
+        comentarioPadre: null, // 🆕 No tiene padre
         ip: reqInfo.ip || '',
         userAgent: reqInfo.userAgent || ''
       });
@@ -103,6 +133,8 @@ class ComentarioService {
         nombre: nuevoComentario.nombre,
         mensaje: nuevoComentario.mensaje,
         relacion: nuevoComentario.relacion,
+        nivelUsuario: nuevoComentario.nivelUsuario,
+        esRespuesta: nuevoComentario.esRespuesta,
         fechaCreacion: nuevoComentario.createdAt,
         mensaje: 'Comentario publicado exitosamente'
       };
@@ -112,20 +144,104 @@ class ComentarioService {
   }
 
   /**
-   * Obtener comentarios públicos de un memorial
+   * 🆕 Crear respuesta a un comentario (solo nivel 'cliente')
    */
-  async getComentariosPublicos(profileId, options = {}) {
+  async crearRespuesta(comentarioPadreId, respuestaData, token, reqInfo = {}) {
     try {
-      const comentarios = await comentarioRepository.getPublicCommentsByMemorial(profileId, options);
-      const total = await comentarioRepository.countByMemorial(profileId);
+      // Verificar token temporal
+      let tokenData;
+      try {
+        tokenData = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (error) {
+        throw new Error('Token inválido o expirado');
+      }
+
+      if (tokenData.type !== 'comment_token') {
+        throw new Error('Token no válido para comentarios');
+      }
+
+      // Verificar que el usuario tiene nivel 'cliente'
+      if (tokenData.nivel !== 'cliente') {
+        throw new Error('Solo el cliente puede responder a comentarios');
+      }
+
+      // Verificar que el comentario padre existe y no es una respuesta
+      const comentarioPadre = await comentarioRepository.findById(comentarioPadreId);
+      if (!comentarioPadre) {
+        throw new Error('Comentario no encontrado');
+      }
+
+      if (comentarioPadre.esRespuesta) {
+        throw new Error('No se puede responder a una respuesta');
+      }
+
+      // Validar datos de la respuesta
+      if (!respuestaData.nombre || respuestaData.nombre.trim().length < 2) {
+        throw new Error('El nombre es requerido (mínimo 2 caracteres)');
+      }
+
+      if (!respuestaData.mensaje || respuestaData.mensaje.trim().length < 5) {
+        throw new Error('El mensaje es requerido (mínimo 5 caracteres)');
+      }
+
+      // Crear respuesta
+      const nuevaRespuesta = await comentarioRepository.create({
+        memorial: tokenData.profileId,
+        nombre: respuestaData.nombre.trim(),
+        mensaje: respuestaData.mensaje.trim(),
+        relacion: respuestaData.relacion ? respuestaData.relacion.trim() : '',
+        codigoUsado: tokenData.codigo,
+        nivelUsuario: tokenData.nivel,
+        esRespuesta: true, // 🆕 Es una respuesta
+        comentarioPadre: comentarioPadreId, // 🆕 Referencia al comentario padre
+        ip: reqInfo.ip || '',
+        userAgent: reqInfo.userAgent || ''
+      });
+
+      return {
+        id: nuevaRespuesta._id,
+        nombre: nuevaRespuesta.nombre,
+        mensaje: nuevaRespuesta.mensaje,
+        relacion: nuevaRespuesta.relacion,
+        nivelUsuario: nuevaRespuesta.nivelUsuario,
+        esRespuesta: nuevaRespuesta.esRespuesta,
+        comentarioPadre: nuevaRespuesta.comentarioPadre,
+        fechaCreacion: nuevaRespuesta.createdAt,
+        mensaje: 'Respuesta publicada exitosamente'
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 Obtener comentarios públicos con respuestas anidadas
+   */
+  async getComentariosConRespuestas(profileId, options = {}) {
+    try {
+      const Comentario = require('../../../models/Comentario');
+      const comentarios = await Comentario.getCommentsWithReplies(profileId, options);
+      const total = await Comentario.countByMemorial(profileId);
 
       return {
         comentarios,
         total,
         page: options.page || 1,
-        limit: options.limit || 50,
-        hasMore: comentarios.length === (options.limit || 50)
+        limit: options.limit || 10,
+        hasMore: comentarios.length === (options.limit || 10)
       };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener comentarios públicos de un memorial (método legacy - mantenido para compatibilidad)
+   */
+  async getComentariosPublicos(profileId, options = {}) {
+    try {
+      // Usar el nuevo método que incluye respuestas
+      return await this.getComentariosConRespuestas(profileId, options);
     } catch (error) {
       throw error;
     }
@@ -194,7 +310,7 @@ class ComentarioService {
         }
       }
       
-      // Actualizar código de cliente
+      // 🆕 Actualizar código de cliente
       if (configuracion.codigoCliente !== undefined) {
         if (configuracion.codigoCliente && configuracion.codigoCliente.trim().length > 0) {
           updates.codigoCliente = configuracion.codigoCliente.trim();
@@ -227,7 +343,7 @@ class ComentarioService {
   }
 
   /**
-   * Generar código automático
+   * Generar códigos automáticos (ambos)
    */
   async generarCodigoAutomatico(profileId, adminId) {
     try {
@@ -237,16 +353,19 @@ class ComentarioService {
         throw new Error('Memorial no encontrado');
       }
 
-      const nuevoCodigo = profile.generarCodigoComentarios();
+      const nuevoCodigoFamiliar = profile.generarCodigoComentarios();
+      const nuevoCodigoCliente = profile.generarCodigoCliente();
       
       const updatedProfile = await profileRepository.update(profileId, {
-        codigoComentarios: nuevoCodigo,
+        codigoComentarios: nuevoCodigoFamiliar,
+        codigoCliente: nuevoCodigoCliente,
         comentariosHabilitados: true
       });
 
       return {
-        codigoComentarios: nuevoCodigo,
-        mensaje: 'Código generado automáticamente'
+        codigoComentarios: nuevoCodigoFamiliar,
+        codigoCliente: nuevoCodigoCliente,
+        mensaje: 'Códigos generados automáticamente'
       };
     } catch (error) {
       throw error;
