@@ -81,8 +81,41 @@ clientSchema.index({ fechaRegistro: -1 });
 clientSchema.pre('save', async function(next) {
   if (this.isNew && !this.codigoCliente) {
     // Generar código único CL-001, CL-002, etc.
-    const count = await this.constructor.countDocuments();
-    this.codigoCliente = `CL-${String(count + 1).padStart(3, '0')}`;
+    let codigoGenerado;
+    let attempts = 0;
+    const maxAttempts = 100;
+    
+    do {
+      attempts++;
+      // Buscar el último código existente
+      const lastClient = await this.constructor.findOne(
+        { codigoCliente: { $regex: /^CL-\d+$/ } },
+        { codigoCliente: 1 }
+      ).sort({ codigoCliente: -1 }).lean();
+      
+      let nextNumber = 1;
+      if (lastClient) {
+        const lastNumber = parseInt(lastClient.codigoCliente.replace('CL-', ''));
+        nextNumber = lastNumber + 1;
+      }
+      
+      codigoGenerado = `CL-${String(nextNumber).padStart(3, '0')}`;
+      
+      // Verificar si ya existe
+      const exists = await this.constructor.findOne({ codigoCliente: codigoGenerado });
+      if (!exists) {
+        this.codigoCliente = codigoGenerado;
+        break;
+      }
+      
+      // Si existe, intentar con el siguiente número
+      nextNumber++;
+      
+    } while (attempts < maxAttempts);
+    
+    if (attempts >= maxAttempts) {
+      throw new Error('No se pudo generar un código único después de múltiples intentos');
+    }
   }
   
   if (this.isModified() && !this.isNew) {
