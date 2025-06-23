@@ -160,10 +160,9 @@ const dashboardSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Índices
-dashboardSchema.index({ perfil: 1 });
-dashboardSchema.index({ 'configuracion.tema': 1 });
-dashboardSchema.index({ 'privacidad.publico': 1 });
+// Índices (perfil ya tiene índice único automático por unique: true)
+dashboardSchema.index({ 'configuracion.tema': 1 }, { background: true });
+dashboardSchema.index({ 'privacidad.publico': 1 }, { background: true });
 
 // Método para obtener secciones activas ordenadas
 dashboardSchema.methods.getSeccionesActivas = function() {
