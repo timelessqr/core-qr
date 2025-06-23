@@ -10,9 +10,9 @@ const { v4: uuidv4 } = require('uuid');
 
 class MediaService {
   /**
-   * Subir archivo de media (foto o video)
+   * Subir archivos de media (compatible con frontend)
    */
-  async uploadMedia(profileId, files, adminId, metadata = {}) {
+  async uploadFiles(files, profileId, userId, sectionInfo) {
     try {
       // Verificar que el memorial existe
       const profile = await profileRepository.findById(profileId);
@@ -23,20 +23,39 @@ class MediaService {
       // Procesar archivos (puede ser uno o múltiples)
       const filesArray = Array.isArray(files) ? files : [files];
       const uploadedMedia = [];
+      const errors = [];
 
       for (const file of filesArray) {
-        const mediaData = await this.processAndUploadFile(profileId, file, metadata);
-        uploadedMedia.push(mediaData);
+        try {
+          const mediaData = await this.processAndUploadFile(profileId, file, {
+            ...sectionInfo,
+            seccion: sectionInfo.seccion || 'galeria'
+          });
+          uploadedMedia.push(mediaData);
+        } catch (error) {
+          errors.push({
+            filename: file.originalname,
+            error: error.message
+          });
+        }
       }
 
       return {
-        uploadedCount: uploadedMedia.length,
-        media: uploadedMedia,
+        totalUploaded: uploadedMedia.length,
+        uploaded: uploadedMedia,
+        errors,
         mensaje: `${uploadedMedia.length} archivo(s) subido(s) exitosamente`
       };
     } catch (error) {
       throw error;
     }
+  }
+
+  /**
+   * Subir archivo de media (método original para compatibilidad)
+   */
+  async uploadMedia(profileId, files, adminId, metadata = {}) {
+    return await this.uploadFiles(files, profileId, adminId, metadata);
   }
 
   /**
@@ -71,6 +90,7 @@ class MediaService {
       const mediaData = {
         memorial: profileId,
         tipo,
+        seccion: metadata.seccion || 'galeria',
         titulo: metadata.titulo || '',
         descripcion: metadata.descripcion || '',
         archivo: {
@@ -107,6 +127,7 @@ class MediaService {
       return {
         id: media._id,
         tipo: media.tipo,
+        seccion: media.seccion,
         titulo: media.titulo,
         descripcion: media.descripcion,
         url: media.archivo.url,
@@ -209,18 +230,71 @@ class MediaService {
   }
 
   /**
+   * Obtener media por perfil con filtros (compatibilidad con frontend)
+   */
+  async getByProfile(profileId, userId, filters = {}) {
+    try {
+      // Verificar que el perfil existe y pertenece al usuario
+      const profile = await profileRepository.findById(profileId);
+      if (!profile) {
+        throw new Error('Memorial no encontrado');
+      }
+
+      // Si se especifica una sección, usar findBySection
+      if (filters.seccion) {
+        const result = await mediaRepository.findBySection(profileId, filters.seccion, {
+          tipo: filters.tipo,
+          estado: filters.estado,
+          page: filters.page || 1,
+          limit: filters.limit || 50
+        });
+        
+        return {
+          media: result.media.map(item => this.formatMediaForAdmin(item)),
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+            hasNext: result.hasNext,
+            hasPrev: result.hasPrev
+          }
+        };
+      }
+
+      // Si no se especifica sección, usar el método original
+      return await this.getMediaByMemorial(profileId, filters);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
    * Obtener media público de un memorial
    */
-  async getPublicMedia(profileId) {
+  async getPublicMedia(profileId, seccion = null) {
     try {
+      if (seccion) {
+        // Si se especifica una sección, obtener solo esa sección
+        const media = await mediaRepository.getPublicMedia(profileId, null, seccion);
+        return {
+          media: media.map(item => this.formatMediaForPublic(item)),
+          total: media.length
+        };
+      }
+
+      // Si no se especifica sección, obtener todo organizado por tipo
       const fotos = await mediaRepository.getPublicMedia(profileId, 'foto');
       const videos = await mediaRepository.getPublicMedia(profileId, 'video');
+      const youtube = await mediaRepository.getPublicMedia(profileId, 'youtube');
 
       return {
         fotos: fotos.map(foto => this.formatMediaForPublic(foto)),
         videos: videos.map(video => this.formatMediaForPublic(video)),
+        musica: youtube.map(track => this.formatMediaForPublic(track)),
         totalFotos: fotos.length,
-        totalVideos: videos.length
+        totalVideos: videos.length,
+        totalMusica: youtube.length
       };
     } catch (error) {
       throw error;
@@ -450,6 +524,151 @@ class MediaService {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  // ===============================
+  // MÉTODOS ESPECÍFICOS PARA FRONTEND
+  // ===============================
+
+  /**
+   * Agregar track de YouTube
+   */
+  async addYouTubeTrack(profileId, trackData) {
+    try {
+      // Verificar que el memorial existe
+      const profile = await profileRepository.findById(profileId);
+      if (!profile) {
+        throw new Error('Memorial no encontrado');
+      }
+
+      // Crear registro de media para YouTube
+      const mediaData = {
+        memorial: profileId,
+        tipo: 'youtube',
+        seccion: 'musica',
+        titulo: trackData.titulo,
+        descripcion: trackData.descripcion,
+        archivo: {
+          nombreOriginal: `YouTube - ${trackData.titulo}`,
+          nombreArchivo: `youtube_${trackData.videoId}`,
+          ruta: trackData.url,
+          url: trackData.url,
+          mimeType: 'video/youtube',
+          tamaño: 0
+        },
+        metadata: {
+          videoId: trackData.videoId,
+          thumbnail: `https://img.youtube.com/vi/${trackData.videoId}/maxresdefault.jpg`,
+          embedUrl: `https://www.youtube.com/embed/${trackData.videoId}`
+        },
+        orden: 0,
+        procesado: {
+          estado: 'completado',
+          versiones: {},
+          fechaProcesado: new Date()
+        }
+      };
+
+      const media = await mediaRepository.create(mediaData);
+
+      return {
+        id: media._id,
+        tipo: media.tipo,
+        titulo: media.titulo,
+        descripcion: media.descripcion,
+        url: media.archivo.url,
+        videoId: media.metadata.videoId,
+        thumbnail: media.metadata.thumbnail,
+        embedUrl: media.metadata.embedUrl,
+        fechaSubida: media.createdAt
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Actualizar configuración de slideshow
+   */
+  async updateSlideshowConfig(profileId, userId, config) {
+    try {
+      // Por ahora, guardamos la configuración en el perfil
+      // En el futuro se puede crear una colección separada para configuraciones
+      const Profile = require('../../../models/Profile');
+      
+      const profile = await Profile.findById(profileId);
+      if (!profile) {
+        throw new Error('Memorial no encontrado');
+      }
+
+      // Actualizar configuración de slideshow (se puede expandir el modelo Profile)
+      const updatedProfile = await Profile.findByIdAndUpdate(
+        profileId,
+        { 
+          'configuracion.slideshow': {
+            autoplay: config.autoplay || false,
+            interval: config.interval || 5000,
+            transition: config.transition || 'fade'
+          }
+        },
+        { new: true, upsert: true }
+      );
+
+      return {
+        profileId,
+        config: updatedProfile.configuracion?.slideshow || config,
+        mensaje: 'Configuración de slideshow actualizada exitosamente'
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener configuración de slideshow
+   */
+  async getSlideshowConfig(profileId, userId) {
+    try {
+      const Profile = require('../../../models/Profile');
+      
+      const profile = await Profile.findById(profileId);
+      if (!profile) {
+        throw new Error('Memorial no encontrado');
+      }
+
+      const defaultConfig = {
+        autoplay: true,
+        interval: 5000,
+        transition: 'fade'
+      };
+
+      return {
+        profileId,
+        config: profile.configuracion?.slideshow || defaultConfig
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener estadísticas de media por perfil
+   */
+  async getProfileMediaStats(profileId) {
+    try {
+      const stats = await mediaRepository.getStats(profileId);
+      
+      // Obtener estadísticas por sección
+      const sectionStats = await mediaRepository.getSectionStats(profileId);
+      
+      return {
+        ...stats,
+        sections: sectionStats,
+        tamañoFormateado: this.formatFileSize(stats.tamañoTotal)
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 }
 

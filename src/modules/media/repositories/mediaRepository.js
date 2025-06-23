@@ -85,7 +85,7 @@ class MediaRepository {
   /**
    * Obtener media público de un memorial (para visitantes)
    */
-  async getPublicMedia(memorialId, tipo = null) {
+  async getPublicMedia(memorialId, tipo = null, seccion = null) {
     try {
       const filtro = { 
         memorial: memorialId,
@@ -95,6 +95,10 @@ class MediaRepository {
       if (tipo) {
         filtro.tipo = tipo;
       }
+      
+      if (seccion) {
+        filtro.seccion = seccion;
+      }
 
       const media = await Media.find(filtro)
         .sort({ orden: 1, createdAt: 1 })
@@ -103,6 +107,7 @@ class MediaRepository {
       return media.map(item => ({
         id: item._id,
         tipo: item.tipo,
+        seccion: item.seccion,
         titulo: item.titulo,
         descripcion: item.descripcion,
         url: item.archivo.url,
@@ -112,7 +117,11 @@ class MediaRepository {
         orden: item.orden,
         esPortada: item.esPortada,
         fechaSubida: item.createdAt,
-        fechaOriginal: item.metadata?.fechaOriginal
+        fechaOriginal: item.metadata?.fechaOriginal,
+        // Campos específicos para YouTube
+        videoId: item.metadata?.videoId,
+        thumbnail: item.metadata?.thumbnail,
+        embedUrl: item.metadata?.embedUrl
       }));
     } catch (error) {
       throw error;
@@ -396,6 +405,117 @@ class MediaRepository {
       
       const count = await Media.countDocuments(filtro);
       return count > 0;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener estadísticas por sección
+   */
+  async getSectionStats(memorialId) {
+    try {
+      const stats = await Media.aggregate([
+        {
+          $match: {
+            memorial: memorialId,
+            estaActivo: true
+          }
+        },
+        {
+          $group: {
+            _id: {
+              seccion: '$seccion',
+              tipo: '$tipo'
+            },
+            count: { $sum: 1 },
+            totalSize: { $sum: '$archivo.tamaño' },
+            totalVistas: { $sum: '$estadisticas.vistas' }
+          }
+        }
+      ]);
+
+      const result = {
+        galeria: { fotos: 0, videos: 0, total: 0, size: 0, views: 0 },
+        fondos: { fotos: 0, videos: 0, total: 0, size: 0, views: 0 },
+        musica: { youtube: 0, total: 0, size: 0, views: 0 }
+      };
+
+      stats.forEach(stat => {
+        const seccion = stat._id.seccion;
+        const tipo = stat._id.tipo;
+        
+        if (result[seccion]) {
+          if (tipo === 'foto') {
+            result[seccion].fotos = stat.count;
+          } else if (tipo === 'video') {
+            result[seccion].videos = stat.count;
+          } else if (tipo === 'youtube') {
+            result[seccion].youtube = stat.count;
+          }
+          
+          result[seccion].total += stat.count;
+          result[seccion].size += stat.totalSize;
+          result[seccion].views += stat.totalVistas;
+        }
+      });
+
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener media filtrado por sección
+   */
+  async findBySection(memorialId, seccion, options = {}) {
+    try {
+      const {
+        tipo = null,
+        activo = true,
+        page = 1,
+        limit = 50,
+        sortBy = 'orden',
+        sortOrder = 'asc'
+      } = options;
+
+      const filtro = { 
+        memorial: memorialId,
+        seccion: seccion,
+        estaActivo: activo
+      };
+      
+      if (tipo) {
+        filtro.tipo = tipo;
+      }
+
+      const sort = {};
+      sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+      
+      if (sortBy === 'orden') {
+        sort.createdAt = 1;
+      }
+
+      const skip = (page - 1) * limit;
+
+      const media = await Media.find(filtro)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      const total = await Media.countDocuments(filtro);
+
+      return {
+        media,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1
+      };
     } catch (error) {
       throw error;
     }

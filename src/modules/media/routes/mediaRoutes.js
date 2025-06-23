@@ -326,6 +326,67 @@ router.delete('/:mediaId',
 );
 
 // ===============================
+// RUTAS ESPECÍFICAS PARA FRONTEND
+// ===============================
+
+/**
+ * @route   POST /api/media/youtube/:profileId
+ * @desc    Agregar track de YouTube
+ * @access  Private
+ * @body    { url, titulo?, descripcion? }
+ */
+router.post('/youtube/:profileId',
+  auth,
+  validateProfileId,
+  mediaController.addYouTubeTrack
+);
+
+/**
+ * @route   GET /api/media/backgrounds/:profileId
+ * @desc    Obtener fondos del memorial
+ * @access  Private
+ */
+router.get('/backgrounds/:profileId',
+  auth,
+  validateProfileId,
+  mediaController.getBackgrounds
+);
+
+/**
+ * @route   GET /api/media/music/:profileId
+ * @desc    Obtener música del memorial
+ * @access  Private
+ */
+router.get('/music/:profileId',
+  auth,
+  validateProfileId,
+  mediaController.getMusic
+);
+
+/**
+ * @route   PUT /api/media/slideshow-config/:profileId
+ * @desc    Actualizar configuración de slideshow
+ * @access  Private
+ * @body    { autoplay?, interval?, transition? }
+ */
+router.put('/slideshow-config/:profileId',
+  auth,
+  validateProfileId,
+  mediaController.updateSlideshowConfig
+);
+
+/**
+ * @route   GET /api/media/slideshow-config/:profileId
+ * @desc    Obtener configuración de slideshow
+ * @access  Private
+ */
+router.get('/slideshow-config/:profileId',
+  auth,
+  validateProfileId,
+  mediaController.getSlideshowConfig
+);
+
+// ===============================
 // MIDDLEWARE DE MANEJO DE ERRORES
 // ===============================
 

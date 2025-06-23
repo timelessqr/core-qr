@@ -11,8 +11,14 @@ const mediaSchema = new mongoose.Schema({
   },
   tipo: {
     type: String,
-    enum: ['foto', 'video'],
+    enum: ['foto', 'video', 'youtube'],
     required: [true, 'El tipo de media es requerido']
+  },
+  seccion: {
+    type: String,
+    enum: ['galeria', 'fondos', 'musica'],
+    default: 'galeria',
+    required: [true, 'La sección es requerida']
   },
   titulo: {
     type: String,
@@ -79,7 +85,11 @@ const mediaSchema = new mongoose.Schema({
       iso: Number,
       apertura: String,
       velocidad: String
-    }
+    },
+    // Campos específicos para YouTube
+    videoId: String,
+    thumbnail: String,
+    embedUrl: String
   },
   orden: {
     type: Number,
@@ -131,11 +141,12 @@ const mediaSchema = new mongoose.Schema({
 });
 
 // Índices
-mediaSchema.index({ memorial: 1, tipo: 1, estaActivo: 1 });
-mediaSchema.index({ memorial: 1, orden: 1 });
-mediaSchema.index({ memorial: 1, esPortada: 1 });
-mediaSchema.index({ createdAt: -1 });
-mediaSchema.index({ 'archivo.url': 1 });
+mediaSchema.index({ memorial: 1, tipo: 1, estaActivo: 1 }, { background: true });
+mediaSchema.index({ memorial: 1, seccion: 1, estaActivo: 1 }, { background: true });
+mediaSchema.index({ memorial: 1, orden: 1 }, { background: true });
+mediaSchema.index({ memorial: 1, esPortada: 1 }, { background: true });
+mediaSchema.index({ createdAt: -1 }, { background: true });
+mediaSchema.index({ 'archivo.url': 1 }, { background: true });
 
 // Método para obtener URL apropiada según el tamaño
 mediaSchema.methods.getUrlPorTamaño = function(tamaño = 'medium') {

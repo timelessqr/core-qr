@@ -148,6 +148,27 @@ const profileSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  
+  // Configuración del memorial
+  configuracion: {
+    slideshow: {
+      autoplay: {
+        type: Boolean,
+        default: true
+      },
+      interval: {
+        type: Number,
+        default: 5000,
+        min: 1000,
+        max: 30000
+      },
+      transition: {
+        type: String,
+        enum: ['fade', 'slide', 'zoom'],
+        default: 'fade'
+      }
+    }
   }
 }, {
   timestamps: true

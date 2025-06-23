@@ -369,6 +369,3 @@ Si hay algún endpoint que no funciona o necesitas ajustes:
 2. **Verificar headers** de autorización  
 3. **Consultar este documento** para ejemplos
 4. **Probar con curl** antes de integrar
-
----
-
