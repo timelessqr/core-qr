@@ -51,6 +51,10 @@ const profileSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  fotoJoven: {
+    type: String,
+    default: null
+  },
   frase: {
     type: String,
     maxlength: [200, 'La frase no puede exceder 200 caracteres'],

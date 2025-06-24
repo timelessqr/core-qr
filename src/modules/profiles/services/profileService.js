@@ -143,6 +143,26 @@ class ProfileService {
     }
   }
   
+  async updateMemorial(profileId, updates) {
+    try {
+      const profile = await profileRepository.findById(profileId);
+      if (!profile) {
+        throw new Error(MESSAGES.ERROR.PROFILE_NOT_FOUND);
+      }
+      
+      const updatedProfile = await profileRepository.update(profileId, updates);
+      
+      return {
+        id: updatedProfile._id,
+        fotoJoven: updatedProfile.fotoJoven,
+        fotoPerfil: updatedProfile.fotoPerfil,
+        mensaje: 'Memorial actualizado exitosamente'
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+  
   async delete(profileId) {
     try {
       const profile = await profileRepository.findById(profileId);
@@ -228,6 +248,7 @@ class ProfileService {
         fechaNacimiento: profile.fechaNacimiento,
         fechaFallecimiento: profile.fechaFallecimiento,
         fotoPerfil: profile.fotoPerfil,
+        fotoJoven: profile.fotoJoven,
         frase: profile.frase,
         ubicacion: profile.ubicacion,
         biografia: profile.biografia,
@@ -321,6 +342,7 @@ class ProfileService {
       fechaNacimiento: profile.fechaNacimiento,
       fechaFallecimiento: profile.fechaFallecimiento,
       fotoPerfil: profile.fotoPerfil,
+      fotoJoven: profile.fotoJoven,
       frase: profile.frase,
       ubicacion: profile.ubicacion,
       biografia: profile.biografia,

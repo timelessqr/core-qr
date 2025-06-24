@@ -61,6 +61,13 @@ router.get('/:profileId/public', profileController.getPublicMemorial);
 router.put('/:id', validate(schemas.profileUpdate), profileController.update);
 
 /**
+ * @route   PUT /api/profiles/:id/memorial
+ * @desc    Actualizar datos específicos del memorial (como fotoJoven)
+ * @access  Private (Admin)
+ */
+router.put('/:id/memorial', profileController.updateMemorial);
+
+/**
  * @route   DELETE /api/profiles/:id
  * @desc    Eliminar perfil/memorial (soft delete)
  * @access  Private (Admin)

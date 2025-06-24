@@ -104,6 +104,23 @@ class ProfileController {
   }
   
   /**
+   * Actualizar datos específicos del memorial (como fotoJoven)
+   */
+  async updateMemorial(req, res) {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const result = await profileService.updateMemorial(id, updates);
+      
+      responseHelper.success(res, result, 'Memorial actualizado exitosamente');
+    } catch (error) {
+      console.error('Error actualizando memorial:', error);
+      responseHelper.error(res, error.message, 400);
+    }
+  }
+  
+  /**
    * Eliminar perfil
    */
   async delete(req, res) {
