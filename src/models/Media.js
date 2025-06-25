@@ -16,7 +16,7 @@ const mediaSchema = new mongoose.Schema({
   },
   seccion: {
     type: String,
-    enum: ['galeria', 'fondos', 'musica'],
+    enum: ['galeria', 'fondos', 'musica', 'perfil'],
     default: 'galeria',
     required: [true, 'La sección es requerida']
   },

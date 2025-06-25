@@ -3,10 +3,19 @@
 // ====================================
 const mediaRepository = require('../repositories/mediaRepository');
 const profileRepository = require('../../profiles/repositories/profileRepository');
-const storageService = require('../../../services/storage/storageService');
+const cloudinary = require('cloudinary').v2;
 const path = require('path');
 const sharp = require('sharp');
 const { v4: uuidv4 } = require('uuid');
+
+// Configurar Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+console.log(`☁️ MediaService usando Cloudinary directamente: ${process.env.CLOUDINARY_CLOUD_NAME}`);
 
 class MediaService {
   /**
@@ -40,11 +49,17 @@ class MediaService {
         }
       }
 
+      const hasSuccessfulUploads = uploadedMedia.length > 0;
+      const hasErrors = errors.length > 0;
+
       return {
+        success: hasSuccessfulUploads, // True si al menos uno se subió exitosamente
         totalUploaded: uploadedMedia.length,
         uploaded: uploadedMedia,
         errors,
-        mensaje: `${uploadedMedia.length} archivo(s) subido(s) exitosamente`
+        mensaje: hasSuccessfulUploads 
+          ? `${uploadedMedia.length} archivo(s) subido(s) exitosamente${hasErrors ? ` (${errors.length} error(es))` : ''}`
+          : `Error: No se pudo subir ningún archivo`
       };
     } catch (error) {
       throw error;
@@ -59,7 +74,7 @@ class MediaService {
   }
 
   /**
-   * Procesar y subir un archivo individual
+   * Procesar y subir un archivo individual - CLOUDINARY DIRECTO
    */
   async processAndUploadFile(profileId, file, metadata = {}) {
     try {
@@ -68,22 +83,60 @@ class MediaService {
 
       // Determinar tipo de media
       const tipo = this.determineMediaType(file.mimetype);
+      const isVideo = file.mimetype.startsWith('video/');
       
       // Generar nombre único para el archivo
       const uniqueFilename = this.generateUniqueFilename(file.originalname);
       
-      // Crear ruta de destino
-      const destinationPath = `memoriales/${profileId}/${tipo}s/${uniqueFilename}`;
+      // Crear ruta de destino en Cloudinary
+      const folder = `memoriales/${profileId}/${tipo}s`;
+      const fileNameWithoutExt = uniqueFilename.replace(/\.[^/.]+$/, '');
+      const publicId = `${folder}/${fileNameWithoutExt}`;
 
-      // Subir archivo usando el storage service
-      const uploadResult = await storageService.uploadFile(file, destinationPath, {
-        contentType: file.mimetype
-      });
+      console.log(`☁️ Subiendo a Cloudinary: ${publicId}`);
+
+      // Configurar opciones de upload para Cloudinary
+      const uploadOptions = {
+        public_id: publicId,
+        resource_type: isVideo ? 'video' : 'image',
+        overwrite: false,
+        transformation: isVideo ? [
+          { quality: 'auto:best', video_codec: 'auto' }
+        ] : [
+          { quality: 'auto:best', fetch_format: 'auto' }
+        ]
+      };
+
+      // Upload a Cloudinary
+      let uploadResult;
+      
+      if (file.buffer) {
+        // Si es buffer (multer en memoria)
+        uploadResult = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            uploadOptions,
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          ).end(file.buffer);
+        });
+      } else if (file.path) {
+        // Si es archivo temporal (multer en disco)
+        uploadResult = await cloudinary.uploader.upload(file.path, uploadOptions);
+      } else {
+        throw new Error('Formato de archivo no soportado');
+      }
+
+      console.log(`✓ Upload exitoso: ${uploadResult.secure_url}`);
 
       // Procesar dimensiones si es imagen
       let dimensiones = {};
-      if (tipo === 'foto') {
-        dimensiones = await this.getImageDimensions(file.buffer);
+      if (tipo === 'foto' && uploadResult.width && uploadResult.height) {
+        dimensiones = { 
+          ancho: uploadResult.width, 
+          alto: uploadResult.height 
+        };
       }
 
       // Crear registro en base de datos
@@ -96,17 +149,26 @@ class MediaService {
         archivo: {
           nombreOriginal: file.originalname,
           nombreArchivo: uniqueFilename,
-          ruta: destinationPath,
-          url: uploadResult.url,
+          ruta: publicId, // Guardamos el public_id de Cloudinary
+          url: uploadResult.secure_url,
           mimeType: file.mimetype,
-          tamaño: file.size
+          tamaño: uploadResult.bytes || file.size
         },
         dimensiones,
         metadata: {
           fechaOriginal: metadata.fechaOriginal ? new Date(metadata.fechaOriginal) : null,
           ubicacion: metadata.ubicacion || {},
           camara: metadata.camara || '',
-          configuracion: metadata.configuracion || {}
+          configuracion: metadata.configuracion || {},
+          // Metadatos de Cloudinary
+          cloudinary: {
+            public_id: uploadResult.public_id,
+            version: uploadResult.version,
+            format: uploadResult.format,
+            width: uploadResult.width,
+            height: uploadResult.height,
+            duration: uploadResult.duration // Para videos
+          }
         },
         orden: metadata.orden || 0,
         esPortada: Boolean(metadata.esPortada),
@@ -119,9 +181,9 @@ class MediaService {
 
       const media = await mediaRepository.create(mediaData);
 
-      // Generar versiones optimizadas si es foto
+      // Generar versiones optimizadas si es foto (Cloudinary automático)
       if (tipo === 'foto') {
-        await this.generateImageVersions(media, file.buffer);
+        await this.generateImageVersions(media, uploadResult.public_id);
       }
 
       return {
@@ -134,74 +196,59 @@ class MediaService {
         dimensiones: media.dimensiones,
         orden: media.orden,
         esPortada: media.esPortada,
-        fechaSubida: media.createdAt
+        fechaSubida: media.createdAt,
+        cloudinary: media.metadata.cloudinary
       };
     } catch (error) {
+      console.error('❌ Error en processAndUploadFile:', error);
       throw error;
     }
   }
 
   /**
-   * Generar versiones optimizadas de imágenes
+   * Generar versiones optimizadas de imágenes - DESHABILITADO PARA CONSERVAR CRÉDITOS
    */
-  async generateImageVersions(media, imageBuffer) {
+  async generateImageVersions(media, publicId) {
     try {
-      const versions = ['thumbnail', 'small', 'medium', 'large'];
-      const sizes = {
-        thumbnail: { width: 150, height: 150 },
-        small: { width: 400, height: 400 },
-        medium: { width: 800, height: 800 },
-        large: { width: 1200, height: 1200 }
+      console.log(`☁️ Skipping automatic versions to conserve credits for: ${publicId}`);
+
+      // OPCIÓN 1: Solo generar URLs sin transformaciones (no consume créditos extra)
+      const versionUrls = {
+        thumbnail: cloudinary.url(publicId),  // URL original, sin transformación
+        small: cloudinary.url(publicId),     // URL original, sin transformación
+        medium: cloudinary.url(publicId),    // URL original, sin transformación
+        large: cloudinary.url(publicId)      // URL original, sin transformación
       };
 
-      const versionUrls = {};
+      // OPCIÓN 2: Generar URLs con transformaciones pero SIN procesar (solo cuando se usen)
+      // Los usuarios pueden usar estas URLs si las necesitan, pero no se procesan ahora
+      const onDemandUrls = {
+        thumbnailOnDemand: cloudinary.url(publicId, { 
+          width: 150, height: 150, crop: 'thumb', quality: 'auto' 
+        }),
+        smallOnDemand: cloudinary.url(publicId, { 
+          width: 400, height: 400, crop: 'limit', quality: 'auto' 
+        }),
+        mediumOnDemand: cloudinary.url(publicId, { 
+          width: 800, height: 800, crop: 'limit', quality: 'auto' 
+        }),
+        largeOnDemand: cloudinary.url(publicId, { 
+          width: 1200, height: 1200, crop: 'limit', quality: 'auto' 
+        })
+      };
+        
+      console.log(`✓ URLs generadas (sin procesamiento): original + on-demand options`);
 
-      for (const version of versions) {
-        try {
-          const { width, height } = sizes[version];
-          
-          // Redimensionar imagen
-          const resizedBuffer = await sharp(imageBuffer)
-            .resize(width, height, { 
-              fit: 'inside',
-              withoutEnlargement: true 
-            })
-            .jpeg({ quality: 85 })
-            .toBuffer();
-
-          // Crear archivo temporal para upload
-          const versionFile = {
-            buffer: resizedBuffer,
-            mimetype: 'image/jpeg',
-            size: resizedBuffer.length
-          };
-
-          // Generar ruta para la versión
-          const versionPath = media.archivo.ruta.replace(
-            path.extname(media.archivo.ruta),
-            `_${version}.jpg`
-          );
-
-          // Subir versión
-          const uploadResult = await storageService.uploadFile(versionFile, versionPath, {
-            contentType: 'image/jpeg'
-          });
-
-          versionUrls[version] = uploadResult.url;
-        } catch (versionError) {
-          console.warn(`Error generando versión ${version}:`, versionError.message);
-        }
-      }
-
-      // Actualizar media con las versiones generadas
+      // Actualizar media con URLs disponibles (pero no procesadas)
       await mediaRepository.update(media._id, {
         'procesado.versiones': versionUrls,
+        'procesado.onDemandVersions': onDemandUrls, // URLs disponibles para usar si se necesitan
         'procesado.estado': 'completado'
       });
 
       return versionUrls;
     } catch (error) {
-      console.error('Error generando versiones de imagen:', error);
+      console.error('Error generando URLs de versiones:', error);
       throw error;
     }
   }
@@ -327,7 +374,7 @@ class MediaService {
   }
 
   /**
-   * Eliminar media
+   * Eliminar media - CLOUDINARY DIRECTO
    */
   async deleteMedia(mediaId, adminId) {
     try {
@@ -336,10 +383,30 @@ class MediaService {
         throw new Error('Media no encontrado');
       }
 
-      // Soft delete primero
-      await mediaRepository.delete(mediaId);
+      // Eliminar de Cloudinary usando el public_id
+      const publicId = media.archivo.ruta; // Guardamos el public_id en ruta
+      
+      if (publicId) {
+        console.log(`☁️ Eliminando de Cloudinary: ${publicId}`);
+        
+        try {
+          // Intentar eliminar como imagen primero
+          let result;
+          if (media.tipo === 'video') {
+            result = await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
+          } else {
+            result = await cloudinary.uploader.destroy(publicId);
+          }
+          
+          console.log(`✓ Eliminado de Cloudinary: ${result.result}`);
+        } catch (cloudinaryError) {
+          console.warn(`⚠️ Error eliminando de Cloudinary: ${cloudinaryError.message}`);
+          // Continuar con soft delete aunque falle Cloudinary
+        }
+      }
 
-      // TODO: Programar eliminación física del archivo después de X días
+      // Soft delete en base de datos
+      await mediaRepository.delete(mediaId);
       
       return {
         mediaId,
@@ -416,18 +483,29 @@ class MediaService {
     }
 
     // Validar tipos permitidos
-    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png']; // Solo JPG y PNG para imágenes
     const allowedVideoTypes = ['video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv'];
     const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
 
     if (!allowedTypes.includes(file.mimetype)) {
-      throw new Error('Tipo de archivo no permitido');
+      if (file.mimetype.startsWith('image/')) {
+        throw new Error('Solo se permiten archivos JPG y PNG para imágenes');
+      } else {
+        throw new Error('Tipo de archivo no permitido');
+      }
     }
 
-    // Validar tamaño
-    const maxSize = 100 * 1024 * 1024; // 100MB
-    if (file.size > maxSize) {
-      throw new Error('Archivo demasiado grande (máximo 100MB)');
+    // Validar tamaño según tipo
+    if (file.mimetype.startsWith('image/')) {
+      const maxImageSize = 10 * 1024 * 1024; // 10MB para imágenes
+      if (file.size > maxImageSize) {
+        throw new Error('La imagen excede el tamaño máximo permitido (10MB)');
+      }
+    } else if (file.mimetype.startsWith('video/')) {
+      const maxVideoSize = 50 * 1024 * 1024; // 50MB para videos (suficiente para 30 segundos en 1080p)
+      if (file.size > maxVideoSize) {
+        throw new Error('El video excede el tamaño máximo permitido (50MB)');
+      }
     }
   }
 
@@ -460,17 +538,9 @@ class MediaService {
   }
 
   /**
-   * Obtener dimensiones de imagen
+   * Obtener dimensiones de imagen desde Cloudinary
+   * (Ya no necesario, Cloudinary nos da las dimensiones directamente)
    */
-  async getImageDimensions(imageBuffer) {
-    try {
-      const { width, height } = await sharp(imageBuffer).metadata();
-      return { ancho: width, alto: height };
-    } catch (error) {
-      console.warn('Error obteniendo dimensiones:', error.message);
-      return {};
-    }
-  }
 
   /**
    * Formatear media para admin

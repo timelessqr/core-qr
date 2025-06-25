@@ -113,7 +113,16 @@ class ProfileController {
       
       const result = await profileService.updateMemorial(id, updates);
       
-      responseHelper.success(res, result, 'Memorial actualizado exitosamente');
+      // Devolver respuesta directa (sin responseHelper wrapper)
+      return res.status(200).json({
+        success: true,
+        data: {
+          success: true,  // Para que getApiData lo preserve
+          ...result,
+          message: 'Memorial actualizado exitosamente'
+        },
+        message: 'Memorial actualizado exitosamente'
+      });
     } catch (error) {
       console.error('Error actualizando memorial:', error);
       responseHelper.error(res, error.message, 400);

@@ -36,12 +36,8 @@ class MediaController {
 
       const result = await mediaService.uploadFiles(files, profileId, userId, sectionInfo);
 
-      responseHelper.success(
-        res,
-        result,
-        `${result.totalUploaded} archivo(s) subido(s) exitosamente`,
-        201
-      );
+      // Devolver respuesta directa (sin responseHelper wrapper)
+      return res.status(201).json(result);
 
     } catch (error) {
       console.error('Error subiendo archivos:', error);
