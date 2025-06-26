@@ -410,10 +410,19 @@ class MediaService {
    */
   async deleteMedia(mediaId, adminId) {
     try {
+      console.log('🔍 Iniciando eliminación de media:', mediaId);
+      
       const media = await mediaRepository.findById(mediaId);
       if (!media) {
         throw new Error('Media no encontrado');
       }
+
+      console.log('🔍 Media encontrado:', { 
+        id: media._id, 
+        url: media.archivo?.url, 
+        publicId: media.archivo?.ruta,
+        tipo: media.tipo
+      });
 
       // Eliminar de Cloudinary usando el public_id
       const publicId = media.archivo.ruta; // Guardamos el public_id en ruta
@@ -437,14 +446,20 @@ class MediaService {
         }
       }
 
-      // Soft delete en base de datos
-      await mediaRepository.delete(mediaId);
+      // HARD DELETE en base de datos (eliminación completa)
+      await mediaRepository.hardDelete(mediaId);
+      console.log('✅ Media eliminado completamente de la base de datos');
       
       return {
         mediaId,
         mensaje: 'Media eliminado exitosamente'
       };
     } catch (error) {
+      console.error('❌ Error completo en deleteMedia:', {
+        error: error.message,
+        stack: error.stack,
+        mediaId
+      });
       throw error;
     }
   }
@@ -578,8 +593,11 @@ class MediaService {
    * Formatear media para admin
    */
   formatMediaForAdmin(media) {
-    return {
-      id: media._id,
+    console.log('🔍 formatMediaForAdmin input:', media._id, media.titulo);
+    
+    const formatted = {
+      _id: media._id, // Asegurar que _id esté presente
+      id: media._id,  // También agregar id por compatibilidad
       tipo: media.tipo,
       titulo: media.titulo,
       descripcion: media.descripcion,
@@ -591,8 +609,13 @@ class MediaService {
       procesado: media.procesado,
       estadisticas: media.estadisticas,
       fechaSubida: media.createdAt,
-      fechaActualizacion: media.updatedAt
+      fechaActualizacion: media.updatedAt,
+      createdAt: media.createdAt, // Agregar para compatibilidad frontend
+      url: media.archivo?.url // Agregar URL directa
     };
+    
+    console.log('🔍 formatMediaForAdmin output:', formatted._id, formatted.titulo);
+    return formatted;
   }
 
   /**
