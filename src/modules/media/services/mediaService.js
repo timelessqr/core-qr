@@ -317,16 +317,39 @@ class MediaService {
   }
 
   /**
-   * Obtener media público de un memorial
+   * Obtener media público de un memorial - CON FILTROS PERFIL
    */
   async getPublicMedia(profileId, seccion = null) {
     try {
+      // Obtener datos del memorial para filtrar fotos de perfil
+      const profileRepository = require('../../profiles/repositories/profileRepository');
+      const memorial = await profileRepository.findById(profileId);
+      
+      const fotosPerfilUrls = [
+        memorial?.fotoPerfil,
+        memorial?.fotoJoven
+      ].filter(Boolean); // Remover valores null/undefined
+      
+      console.log('🔍 URLs de fotos de perfil a filtrar:', fotosPerfilUrls);
+      
       if (seccion) {
         // Si se especifica una sección, obtener solo esa sección
         const media = await mediaRepository.getPublicMedia(profileId, null, seccion);
+        
+        // Filtrar fotos de perfil
+        const mediaFiltrada = media.filter(item => {
+          if (item.tipo === 'foto') {
+            const itemUrl = item.url || item.archivo?.url;
+            return !fotosPerfilUrls.includes(itemUrl);
+          }
+          return true; // Mantener videos y otros tipos
+        });
+        
+        console.log(`📊 Media ${seccion} original: ${media.length}, filtrada: ${mediaFiltrada.length}`);
+        
         return {
-          media: media.map(item => this.formatMediaForPublic(item)),
-          total: media.length
+          media: mediaFiltrada.map(item => this.formatMediaForPublic(item)),
+          total: mediaFiltrada.length
         };
       }
 
@@ -335,11 +358,20 @@ class MediaService {
       const videos = await mediaRepository.getPublicMedia(profileId, 'video');
       const youtube = await mediaRepository.getPublicMedia(profileId, 'youtube');
 
+      // Filtrar fotos de perfil de la galería
+      const fotosFiltradas = fotos.filter(foto => {
+        const fotoUrl = foto.url || foto.archivo?.url;
+        return !fotosPerfilUrls.includes(fotoUrl);
+      });
+      
+      console.log(`📊 Fotos originales: ${fotos.length}, filtradas: ${fotosFiltradas.length}`);
+      console.log(`📊 URLs filtradas:`, fotosPerfilUrls);
+
       return {
-        fotos: fotos.map(foto => this.formatMediaForPublic(foto)),
+        fotos: fotosFiltradas.map(foto => this.formatMediaForPublic(foto)),
         videos: videos.map(video => this.formatMediaForPublic(video)),
         musica: youtube.map(track => this.formatMediaForPublic(track)),
-        totalFotos: fotos.length,
+        totalFotos: fotosFiltradas.length,
         totalVideos: videos.length,
         totalMusica: youtube.length
       };
