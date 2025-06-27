@@ -229,9 +229,21 @@ class ProfileService {
         throw new Error('Memorial no encontrado o no público');
       }
       
-      // Obtener media del memorial (fotos y videos)
+      // Obtener media del memorial POR SECCIONES SEPARADAS
       const mediaService = require('../../media/services/mediaService');
-      const mediaData = await mediaService.getPublicMedia(profileId);
+      
+      console.log('🌍 ProfileService.getPublicMemorial - Obteniendo media por secciones');
+      
+      // Obtener cada sección por separado
+      const galeriaData = await mediaService.getPublicMedia(profileId, 'galeria');
+      const fondosData = await mediaService.getPublicMedia(profileId, 'fondos');
+      const musicaData = await mediaService.getPublicMedia(profileId, 'musica');
+      
+      console.log('🌍 Media obtenida:', {
+        galeria: galeriaData.media?.length || 0,
+        fondos: fondosData.media?.length || 0,
+        musica: musicaData.media?.length || 0
+      });
       
       // Obtener configuración de dashboard
       const dashboardService = require('../../dashboard/services/dashboardService');
@@ -256,12 +268,16 @@ class ProfileService {
         familia: profile.familia,
         edadAlFallecer: this.calculateAge(profile.fechaNacimiento, profile.fechaFallecimiento),
         añosTranscurridos: this.calculateYearsSince(profile.fechaFallecimiento),
-        // 🔥 NUEVA SECCIÓN: MEDIA
-        galeria: mediaData.fotos || [],
-        videos: mediaData.videos || [],
+        // 🔥 MEDIA POR SECCIONES SEPARADAS
+        galeria: galeriaData.media || [],
+        videos: galeriaData.media?.filter(item => item.tipo === 'video') || [],
+        fondos: fondosData.media || [], // Nueva sección separada
+        canciones: musicaData.media || [], // Música del memorial
         estadisticasMedia: {
-          totalFotos: mediaData.totalFotos || 0,
-          totalVideos: mediaData.totalVideos || 0
+          totalFotos: galeriaData.media?.filter(item => item.tipo === 'foto').length || 0,
+          totalVideos: galeriaData.media?.filter(item => item.tipo === 'video').length || 0,
+          totalFondos: fondosData.media?.length || 0,
+          totalCanciones: musicaData.media?.length || 0
         },
         // 🔥 NUEVA SECCIÓN: DASHBOARD
         dashboard: dashboardData || {

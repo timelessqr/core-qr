@@ -94,6 +94,8 @@ class MediaService {
       const publicId = `${folder}/${fileNameWithoutExt}`;
 
       console.log(`☁️ Subiendo a Cloudinary: ${publicId}`);
+      console.log('📊 Upload metadata recibido:', metadata);
+      console.log('📊 Sección para este archivo:', metadata.seccion || 'galeria');
 
       // Configurar opciones de upload para Cloudinary
       const uploadOptions = {
@@ -179,7 +181,22 @@ class MediaService {
         }
       };
 
+      console.log('📊 Datos que se guardarán en BD:', {
+        memorial: profileId,
+        tipo,
+        seccion: metadata.seccion || 'galeria',
+        titulo: metadata.titulo || '',
+        url: uploadResult.secure_url
+      });
+      
       const media = await mediaRepository.create(mediaData);
+      
+      console.log('📊 Media guardado exitosamente:', {
+        id: media._id,
+        tipo: media.tipo,
+        seccion: media.seccion,
+        titulo: media.titulo
+      });
 
       // Generar versiones optimizadas si es foto (Cloudinary automático)
       if (tipo === 'foto') {
@@ -281,19 +298,34 @@ class MediaService {
    */
   async getByProfile(profileId, userId, filters = {}) {
     try {
+      console.log('📊 Backend MediaService.getByProfile - Iniciando');
+      console.log('📊 ProfileId:', profileId);
+      console.log('📊 UserId:', userId);
+      console.log('📊 Filtros recibidos:', filters);
+      
       // Verificar que el perfil existe y pertenece al usuario
       const profile = await profileRepository.findById(profileId);
       if (!profile) {
         throw new Error('Memorial no encontrado');
       }
+      
+      console.log('📊 Memorial encontrado:', profile.nombre);
 
       // Si se especifica una sección, usar findBySection
       if (filters.seccion) {
+        console.log('📊 Buscando por sección:', filters.seccion, 'tipo:', filters.tipo);
+        
         const result = await mediaRepository.findBySection(profileId, filters.seccion, {
           tipo: filters.tipo,
           estado: filters.estado,
           page: filters.page || 1,
           limit: filters.limit || 50
+        });
+        
+        console.log('📊 Resultado findBySection:', {
+          total: result.total,
+          mediaCount: result.media?.length,
+          sampleMedia: result.media?.[0]
         });
         
         return {
@@ -310,8 +342,10 @@ class MediaService {
       }
 
       // Si no se especifica sección, usar el método original
+      console.log('📊 No se especificó sección, usando método original');
       return await this.getMediaByMemorial(profileId, filters);
     } catch (error) {
+      console.error('❌ Backend MediaService.getByProfile - Error:', error);
       throw error;
     }
   }
@@ -321,6 +355,8 @@ class MediaService {
    */
   async getPublicMedia(profileId, seccion = null) {
     try {
+      console.log('🌍 PublicMedia - Iniciando para profileId:', profileId, 'seccion:', seccion);
+      
       // Obtener datos del memorial para filtrar fotos de perfil
       const profileRepository = require('../../profiles/repositories/profileRepository');
       const memorial = await profileRepository.findById(profileId);
@@ -333,8 +369,20 @@ class MediaService {
       console.log('🔍 URLs de fotos de perfil a filtrar:', fotosPerfilUrls);
       
       if (seccion) {
+        console.log('🌍 Buscando sección específica:', seccion);
+        
         // Si se especifica una sección, obtener solo esa sección
         const media = await mediaRepository.getPublicMedia(profileId, null, seccion);
+        
+        console.log('🌍 Media obtenido para', seccion, ':', media.length, 'items');
+        if (media.length > 0) {
+          console.log('🌍 Primer item:', {
+            id: media[0].id,
+            tipo: media[0].tipo,
+            seccion: media[0].seccion,
+            url: media[0].url?.substring(0, 50) + '...'
+          });
+        }
         
         // Filtrar fotos de perfil
         const mediaFiltrada = media.filter(item => {

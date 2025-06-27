@@ -87,6 +87,11 @@ class MediaRepository {
    */
   async getPublicMedia(memorialId, tipo = null, seccion = null) {
     try {
+      console.log('🌍 Repository.getPublicMedia - Iniciando');
+      console.log('🌍 MemorialId:', memorialId);
+      console.log('🌍 Tipo:', tipo);
+      console.log('🌍 Seccion:', seccion);
+      
       const filtro = { 
         memorial: memorialId,
         estaActivo: true
@@ -99,12 +104,24 @@ class MediaRepository {
       if (seccion) {
         filtro.seccion = seccion;
       }
+      
+      console.log('🌍 Filtro de consulta:', filtro);
 
       const media = await Media.find(filtro)
         .sort({ orden: 1, createdAt: 1 })
         .lean();
+        
+      console.log('🌍 Media encontrado:', media.length, 'registros');
+      if (media.length > 0) {
+        console.log('🌍 Primer media:', {
+          id: media[0]._id,
+          tipo: media[0].tipo,
+          seccion: media[0].seccion,
+          titulo: media[0].titulo
+        });
+      }
 
-      return media.map(item => ({
+      const result = media.map(item => ({
         id: item._id,
         tipo: item.tipo,
         seccion: item.seccion,
@@ -123,7 +140,12 @@ class MediaRepository {
         thumbnail: item.metadata?.thumbnail,
         embedUrl: item.metadata?.embedUrl
       }));
+      
+      console.log('🌍 Resultado mapeado:', result.length, 'items');
+      
+      return result;
     } catch (error) {
+      console.error('❌ Repository.getPublicMedia - Error:', error);
       throw error;
     }
   }
@@ -471,6 +493,11 @@ class MediaRepository {
    */
   async findBySection(memorialId, seccion, options = {}) {
     try {
+      console.log('🖼️ Repository.findBySection - Iniciando');
+      console.log('🖼️ MemorialId:', memorialId);
+      console.log('🖼️ Seccion:', seccion);
+      console.log('🖼️ Options:', options);
+      
       const {
         tipo = null,
         activo = true,
@@ -489,6 +516,8 @@ class MediaRepository {
       if (tipo) {
         filtro.tipo = tipo;
       }
+      
+      console.log('🖼️ Filtro de MongoDB:', filtro);
 
       const sort = {};
       sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
@@ -504,8 +533,19 @@ class MediaRepository {
         .skip(skip)
         .limit(limit)
         .lean();
+        
+      console.log('🖼️ Media encontrado:', media.length, 'registros');
+      if (media.length > 0) {
+        console.log('🖼️ Primer registro:', {
+          id: media[0]._id,
+          tipo: media[0].tipo,
+          seccion: media[0].seccion,
+          titulo: media[0].titulo
+        });
+      }
 
       const total = await Media.countDocuments(filtro);
+      console.log('🖼️ Total count:', total);
 
       return {
         media,
@@ -517,6 +557,7 @@ class MediaRepository {
         hasPrev: page > 1
       };
     } catch (error) {
+      console.error('❌ Repository.findBySection - Error:', error);
       throw error;
     }
   }
