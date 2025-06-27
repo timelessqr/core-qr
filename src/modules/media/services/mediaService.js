@@ -492,11 +492,17 @@ class MediaService {
         console.log(`☁️ Eliminando de Cloudinary: ${publicId}`);
         
         try {
-          // Intentar eliminar como imagen primero
+          // Eliminar según el tipo correcto de recurso
           let result;
-          if (media.tipo === 'video') {
+          console.log(`🔍 Tipo de media para eliminar: ${media.tipo}`);
+          
+          if (media.tipo === 'video' || media.tipo === 'archivo_mp3') {
+            // Videos y archivos MP3 usan resource_type: 'video' en Cloudinary
+            console.log(`☁️ Eliminando como video/audio: ${publicId}`);
             result = await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
           } else {
+            // Imágenes usan resource_type por defecto (image)
+            console.log(`☁️ Eliminando como imagen: ${publicId}`);
             result = await cloudinary.uploader.destroy(publicId);
           }
           
