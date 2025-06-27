@@ -84,6 +84,7 @@ class MediaService {
       // Determinar tipo de media
       const tipo = this.determineMediaType(file.mimetype);
       const isVideo = file.mimetype.startsWith('video/');
+      const isAudio = file.mimetype.startsWith('audio/');
       
       // Generar nombre único para el archivo
       const uniqueFilename = this.generateUniqueFilename(file.originalname);
@@ -96,13 +97,14 @@ class MediaService {
       console.log(`☁️ Subiendo a Cloudinary: ${publicId}`);
       console.log('📊 Upload metadata recibido:', metadata);
       console.log('📊 Sección para este archivo:', metadata.seccion || 'galeria');
+      console.log('📊 Tipo de archivo:', { tipo, isVideo, isAudio, mimetype: file.mimetype });
 
       // Configurar opciones de upload para Cloudinary
       const uploadOptions = {
         public_id: publicId,
-        resource_type: isVideo ? 'video' : 'image',
+        resource_type: (isVideo || isAudio) ? 'video' : 'image', // Cloudinary trata audio como 'video' resource_type
         overwrite: false,
-        transformation: isVideo ? [
+        transformation: (isVideo || isAudio) ? [
           { quality: 'auto:best', video_codec: 'auto' }
         ] : [
           { quality: 'auto:best', fetch_format: 'auto' }
@@ -132,12 +134,16 @@ class MediaService {
 
       console.log(`✓ Upload exitoso: ${uploadResult.secure_url}`);
 
-      // Procesar dimensiones si es imagen
+      // Procesar dimensiones si es imagen o duración si es audio/video
       let dimensiones = {};
       if (tipo === 'foto' && uploadResult.width && uploadResult.height) {
         dimensiones = { 
           ancho: uploadResult.width, 
           alto: uploadResult.height 
+        };
+      } else if ((tipo === 'video' || tipo === 'archivo_mp3') && uploadResult.duration) {
+        dimensiones = {
+          duracion: uploadResult.duration // Duración en segundos para audio/video
         };
       }
 
@@ -202,6 +208,13 @@ class MediaService {
       if (tipo === 'foto') {
         await this.generateImageVersions(media, uploadResult.public_id);
       }
+      
+      console.log('✅ Archivo subido exitosamente:', {
+        tipo,
+        seccion: metadata.seccion,
+        url: uploadResult.secure_url,
+        duracion: uploadResult.duration || 'N/A'
+      });
 
       return {
         id: media._id,
@@ -580,11 +593,14 @@ class MediaService {
     // Validar tipos permitidos
     const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png']; // Solo JPG y PNG para imágenes
     const allowedVideoTypes = ['video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv'];
-    const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
+    const allowedAudioTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/x-m4a'];
+    const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes, ...allowedAudioTypes];
 
     if (!allowedTypes.includes(file.mimetype)) {
       if (file.mimetype.startsWith('image/')) {
         throw new Error('Solo se permiten archivos JPG y PNG para imágenes');
+      } else if (file.mimetype.startsWith('audio/')) {
+        throw new Error('Solo se permiten archivos MP3, WAV, OGG y M4A para audio');
       } else {
         throw new Error('Tipo de archivo no permitido');
       }
@@ -601,6 +617,11 @@ class MediaService {
       if (file.size > maxVideoSize) {
         throw new Error('El video excede el tamaño máximo permitido (50MB)');
       }
+    } else if (file.mimetype.startsWith('audio/')) {
+      const maxAudioSize = 20 * 1024 * 1024; // 20MB para audio (suficiente para 5-7 minutos en calidad alta)
+      if (file.size > maxAudioSize) {
+        throw new Error('El archivo de audio excede el tamaño máximo permitido (20MB)');
+      }
     }
   }
 
@@ -612,6 +633,8 @@ class MediaService {
       return 'foto';
     } else if (mimetype.startsWith('video/')) {
       return 'video';
+    } else if (mimetype.startsWith('audio/')) {
+      return 'archivo_mp3';
     } else {
       throw new Error('Tipo de archivo no soportado');
     }
@@ -702,63 +725,6 @@ class MediaService {
   // ===============================
   // MÉTODOS ESPECÍFICOS PARA FRONTEND
   // ===============================
-
-  /**
-   * Agregar track de YouTube
-   */
-  async addYouTubeTrack(profileId, trackData) {
-    try {
-      // Verificar que el memorial existe
-      const profile = await profileRepository.findById(profileId);
-      if (!profile) {
-        throw new Error('Memorial no encontrado');
-      }
-
-      // Crear registro de media para YouTube
-      const mediaData = {
-        memorial: profileId,
-        tipo: 'youtube',
-        seccion: 'musica',
-        titulo: trackData.titulo,
-        descripcion: trackData.descripcion,
-        archivo: {
-          nombreOriginal: `YouTube - ${trackData.titulo}`,
-          nombreArchivo: `youtube_${trackData.videoId}`,
-          ruta: trackData.url,
-          url: trackData.url,
-          mimeType: 'video/youtube',
-          tamaño: 0
-        },
-        metadata: {
-          videoId: trackData.videoId,
-          thumbnail: `https://img.youtube.com/vi/${trackData.videoId}/maxresdefault.jpg`,
-          embedUrl: `https://www.youtube.com/embed/${trackData.videoId}`
-        },
-        orden: 0,
-        procesado: {
-          estado: 'completado',
-          versiones: {},
-          fechaProcesado: new Date()
-        }
-      };
-
-      const media = await mediaRepository.create(mediaData);
-
-      return {
-        id: media._id,
-        tipo: media.tipo,
-        titulo: media.titulo,
-        descripcion: media.descripcion,
-        url: media.archivo.url,
-        videoId: media.metadata.videoId,
-        thumbnail: media.metadata.thumbnail,
-        embedUrl: media.metadata.embedUrl,
-        fechaSubida: media.createdAt
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
 
   /**
    * Actualizar configuración de slideshow

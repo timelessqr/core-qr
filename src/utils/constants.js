@@ -47,13 +47,15 @@ module.exports = {
   // 📄 FORMATOS DE ARCHIVO PERMITIDOS
   FORMATOS_PERMITIDOS: {
     fotos: ['jpg', 'jpeg', 'png', 'webp'],
-    videos: ['mp4']
+    videos: ['mp4'],
+    audio: ['mp3', 'wav', 'ogg', 'm4a']
   },
 
   // 📏 LÍMITES DE ARCHIVO
   FILE_LIMITS: {
     FOTO_MAX_SIZE: (parseInt(process.env.MAX_PHOTO_SIZE_MB) || 5) * 1024 * 1024, // 5MB
     VIDEO_MAX_SIZE: (parseInt(process.env.MAX_FILE_SIZE_MB) || 100) * 1024 * 1024, // 100MB
+    AUDIO_MAX_SIZE: (parseInt(process.env.MAX_AUDIO_SIZE_MB) || 20) * 1024 * 1024, // 20MB
     QR_IMAGE_SIZE: parseInt(process.env.QR_IMAGE_SIZE) || 512,
     QR_IMAGE_QUALITY: parseFloat(process.env.QR_IMAGE_QUALITY) || 0.92
   },

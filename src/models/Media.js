@@ -11,7 +11,7 @@ const mediaSchema = new mongoose.Schema({
   },
   tipo: {
     type: String,
-    enum: ['foto', 'video', 'youtube'],
+    enum: ['foto', 'video', 'archivo_mp3'],
     required: [true, 'El tipo de media es requerido']
   },
   seccion: {

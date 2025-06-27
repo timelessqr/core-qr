@@ -266,41 +266,6 @@ class MediaController {
   // ===============================
 
   /**
-   * Agregar track de YouTube
-   * POST /api/media/youtube/:profileId
-   */
-  async addYouTubeTrack(req, res) {
-    try {
-      const { profileId } = req.params;
-      const userId = req.user.id;
-      const { url, titulo, descripcion } = req.body;
-
-      if (!url) {
-        return responseHelper.error(res, 'URL de YouTube es requerida', 400);
-      }
-
-      // Validar URL de YouTube
-      const videoId = this.extractYouTubeId(url);
-      if (!videoId) {
-        return responseHelper.error(res, 'URL de YouTube inválida', 400);
-      }
-
-      const result = await mediaService.addYouTubeTrack(profileId, {
-        url,
-        videoId,
-        titulo: titulo || 'Música del recuerdo',
-        descripcion: descripcion || ''
-      });
-
-      responseHelper.success(res, result, 'Track de YouTube agregado exitosamente', 201);
-
-    } catch (error) {
-      console.error('Error agregando track de YouTube:', error);
-      responseHelper.error(res, error.message, 400);
-    }
-  }
-
-  /**
    * Obtener fondos del memorial
    * GET /api/media/backgrounds/:profileId
    */
@@ -382,18 +347,6 @@ class MediaController {
     }
   }
 
-  // ===============================
-  // MÉTODOS AUXILIARES
-  // ===============================
-
-  /**
-   * Extraer ID de YouTube de una URL
-   */
-  extractYouTubeId(url) {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-  }
 }
 
 module.exports = new MediaController();

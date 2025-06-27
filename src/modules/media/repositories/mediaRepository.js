@@ -135,13 +135,23 @@ class MediaRepository {
         esPortada: item.esPortada,
         fechaSubida: item.createdAt,
         fechaOriginal: item.metadata?.fechaOriginal,
-        // Campos específicos para YouTube
-        videoId: item.metadata?.videoId,
-        thumbnail: item.metadata?.thumbnail,
-        embedUrl: item.metadata?.embedUrl
+        // Campos del archivo para debugging
+        archivo: {
+          url: item.archivo.url,
+          nombreOriginal: item.archivo.nombreOriginal,
+          tamaño: item.archivo.tamaño
+        }
       }));
       
       console.log('🌍 Resultado mapeado:', result.length, 'items');
+      if (result.length > 0) {
+        console.log('🌍 Primer item mapeado:', {
+          id: result[0].id,
+          tipo: result[0].tipo,
+          url: result[0].url,
+          archivo_url: result[0].archivo?.url
+        });
+      }
       
       return result;
     } catch (error) {

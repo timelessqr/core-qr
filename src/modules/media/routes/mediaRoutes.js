@@ -36,6 +36,13 @@ const fileFilter = (req, file, cb) => {
     }
   }
   
+  // Verificar si es audio
+  if (file.mimetype.startsWith('audio/')) {
+    if (FORMATOS_PERMITIDOS.audio.includes(ext)) {
+      return cb(null, true);
+    }
+  }
+  
   cb(new Error(`Formato de archivo no permitido: ${ext}`), false);
 };
 
@@ -328,18 +335,6 @@ router.delete('/:mediaId',
 // ===============================
 // RUTAS ESPECÍFICAS PARA FRONTEND
 // ===============================
-
-/**
- * @route   POST /api/media/youtube/:profileId
- * @desc    Agregar track de YouTube
- * @access  Private
- * @body    { url, titulo?, descripcion? }
- */
-router.post('/youtube/:profileId',
-  auth,
-  validateProfileId,
-  mediaController.addYouTubeTrack
-);
 
 /**
  * @route   GET /api/media/backgrounds/:profileId
