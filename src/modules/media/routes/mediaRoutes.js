@@ -5,7 +5,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const mediaController = require('../controllers/mediaController');
-const storageController = require('../controllers/storageController');
+// const storageController = require('../controllers/storageController'); // DISABLED - Not using storage routes
 const auth = require('../../../middleware/auth');
 const { FILE_LIMITS, FORMATOS_PERMITIDOS } = require('../../../utils/constants');
 
@@ -126,91 +126,23 @@ const handleMulterError = (error, req, res, next) => {
 };
 
 // ===============================
-// RUTAS DE STORAGE
+// RUTAS DE STORAGE - DISABLED
 // ===============================
+// Storage routes disabled - using R2 directly in mediaController
 
-/**
- * @route   GET /api/media/storage/info
- * @desc    Obtener información del proveedor de storage
- * @access  Private
- */
-router.get('/storage/info',
-  auth,
-  storageController.getProviderInfo
-);
+/*
+// Storage routes commented out - not using storageController
 
-/**
- * @route   GET /api/media/storage/stats
- * @desc    Obtener estadísticas de uso de storage
- * @access  Private
- */
-router.get('/storage/stats',
-  auth,
-  storageController.getUsageStats
-);
+router.get('/storage/info', auth, storageController.getProviderInfo);
+router.get('/storage/stats', auth, storageController.getUsageStats);
+router.post('/storage/presigned-url', auth, storageController.generatePresignedUrl);
+router.get('/storage/list', auth, storageController.listUserFiles);
+router.get('/storage/exists/:filePath(*)', auth, storageController.checkFileExists);
+router.get('/storage/file-info/:filePath(*)', auth, storageController.getFileInfo);
+router.get('/storage/download-url/:filePath(*)', auth, storageController.getDownloadUrl);
+router.post('/storage/migrate-to-r2', auth, storageController.migrateToR2);
 
-/**
- * @route   POST /api/media/storage/presigned-url
- * @desc    Generar URL presignada para upload directo (solo R2)
- * @access  Private
- * @body    { filePath, contentType?, contentLength?, expiresIn?, metadata? }
- */
-router.post('/storage/presigned-url',
-  auth,
-  storageController.generatePresignedUrl
-);
-
-/**
- * @route   GET /api/media/storage/list
- * @desc    Listar archivos del usuario
- * @access  Private
- * @query   { directory?, fileType?, limit? }
- */
-router.get('/storage/list',
-  auth,
-  storageController.listUserFiles
-);
-
-/**
- * @route   GET /api/media/storage/exists/:filePath
- * @desc    Verificar si un archivo existe
- * @access  Private
- */
-router.get('/storage/exists/:filePath(*)',
-  auth,
-  storageController.checkFileExists
-);
-
-/**
- * @route   GET /api/media/storage/file-info/:filePath
- * @desc    Obtener información de un archivo específico
- * @access  Private
- */
-router.get('/storage/file-info/:filePath(*)',
-  auth,
-  storageController.getFileInfo
-);
-
-/**
- * @route   GET /api/media/storage/download-url/:filePath
- * @desc    Obtener URL de descarga para archivos privados
- * @access  Private
- * @query   { expiresIn?, responseContentDisposition?, responseContentType? }
- */
-router.get('/storage/download-url/:filePath(*)',
-  auth,
-  storageController.getDownloadUrl
-);
-
-/**
- * @route   POST /api/media/storage/migrate-to-r2
- * @desc    Migrar archivos de local a R2 (función administrativa)
- * @access  Private
- */
-router.post('/storage/migrate-to-r2',
-  auth,
-  storageController.migrateToR2
-);
+*/
 
 // ===============================
 // RUTAS PRINCIPALES
