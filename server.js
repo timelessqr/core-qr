@@ -25,7 +25,9 @@ app.use(cors({
     'http://localhost:5174',      // Para desarrollo local - puerto alternativo
     'http://192.168.1.34:5173',   // Para acceso desde red local (móvil)
     'http://192.168.1.34:5174',   // Para acceso desde red local - puerto alternativo
-    process.env.FRONTEND_URL      // URL del .env como backup
+    process.env.FRONTEND_URL,     // URL del .env
+    'https://qr-front-timelessqrs-projects.vercel.app', // URL temporal Vercel
+    'https://sistemalazosdevida.com'  // URL final del dominio
   ].filter(Boolean), // Filtrar valores undefined
   credentials: true
 }));
