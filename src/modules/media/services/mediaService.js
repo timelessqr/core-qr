@@ -1,21 +1,14 @@
 // ====================================
-// src/modules/media/services/mediaService.js
+// src/modules/media/services/mediaService.js - CLOUDFLARE R2 VERSION
 // ====================================
 const mediaRepository = require('../repositories/mediaRepository');
 const profileRepository = require('../../profiles/repositories/profileRepository');
-const cloudinary = require('cloudinary').v2;
+const r2StorageService = require('../../../services/storage/r2StorageService');
 const path = require('path');
 const sharp = require('sharp');
 const { v4: uuidv4 } = require('uuid');
 
-// Configurar Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
-console.log(`☁️ MediaService usando Cloudinary directamente: ${process.env.CLOUDINARY_CLOUD_NAME}`);
+console.log(`☁️ MediaService usando Cloudflare R2`);
 
 class MediaService {
   /**
@@ -53,7 +46,7 @@ class MediaService {
       const hasErrors = errors.length > 0;
 
       return {
-        success: hasSuccessfulUploads, // True si al menos uno se subió exitosamente
+        success: hasSuccessfulUploads,
         totalUploaded: uploadedMedia.length,
         uploaded: uploadedMedia,
         errors,
@@ -74,7 +67,7 @@ class MediaService {
   }
 
   /**
-   * Procesar y subir un archivo individual - CLOUDINARY DIRECTO
+   * Procesar y subir un archivo individual - CLOUDFLARE R2
    */
   async processAndUploadFile(profileId, file, metadata = {}) {
     try {
@@ -89,63 +82,56 @@ class MediaService {
       // Generar nombre único para el archivo
       const uniqueFilename = this.generateUniqueFilename(file.originalname);
       
-      // Crear ruta de destino en Cloudinary
+      // Crear ruta de destino en R2
       const folder = `memoriales/${profileId}/${tipo}s`;
-      const fileNameWithoutExt = uniqueFilename.replace(/\.[^/.]+$/, '');
-      const publicId = `${folder}/${fileNameWithoutExt}`;
+      const destinationPath = `${folder}/${uniqueFilename}`;
 
-      console.log(`☁️ Subiendo a Cloudinary: ${publicId}`);
+      console.log(`☁️ Subiendo a R2: ${destinationPath}`);
       console.log('📊 Upload metadata recibido:', metadata);
       console.log('📊 Sección para este archivo:', metadata.seccion || 'galeria');
       console.log('📊 Tipo de archivo:', { tipo, isVideo, isAudio, mimetype: file.mimetype });
 
-      // Configurar opciones de upload para Cloudinary
+      // Configurar opciones de upload para R2
       const uploadOptions = {
-        public_id: publicId,
-        resource_type: (isVideo || isAudio) ? 'video' : 'image', // Cloudinary trata audio como 'video' resource_type
-        overwrite: false,
-        transformation: (isVideo || isAudio) ? [
-          { quality: 'auto:best', video_codec: 'auto' }
-        ] : [
-          { quality: 'auto:best', fetch_format: 'auto' }
-        ]
+        contentType: file.mimetype,
+        metadata: {
+          originalName: file.originalname,
+          profileId: profileId,
+          tipo: tipo,
+          seccion: metadata.seccion || 'galeria',
+          titulo: metadata.titulo || '',
+          uploadedBy: 'lazos-de-vida-api'
+        },
+        cacheControl: 'public, max-age=31536000' // 1 año de cache
       };
 
-      // Upload a Cloudinary
-      let uploadResult;
-      
-      if (file.buffer) {
-        // Si es buffer (multer en memoria)
-        uploadResult = await new Promise((resolve, reject) => {
-          cloudinary.uploader.upload_stream(
-            uploadOptions,
-            (error, result) => {
-              if (error) reject(error);
-              else resolve(result);
-            }
-          ).end(file.buffer);
-        });
-      } else if (file.path) {
-        // Si es archivo temporal (multer en disco)
-        uploadResult = await cloudinary.uploader.upload(file.path, uploadOptions);
-      } else {
-        throw new Error('Formato de archivo no soportado');
-      }
+      // Upload a R2
+      const uploadResult = await r2StorageService.uploadFile(
+        file, 
+        destinationPath, 
+        uploadOptions
+      );
 
-      console.log(`✓ Upload exitoso: ${uploadResult.secure_url}`);
+      console.log(`✓ Upload exitoso: ${uploadResult.url}`);
 
-      // Procesar dimensiones si es imagen o duración si es audio/video
+      // Procesar dimensiones si es imagen usando Sharp
       let dimensiones = {};
-      if (tipo === 'foto' && uploadResult.width && uploadResult.height) {
-        dimensiones = { 
-          ancho: uploadResult.width, 
-          alto: uploadResult.height 
-        };
-      } else if ((tipo === 'video' || tipo === 'archivo_mp3') && uploadResult.duration) {
-        dimensiones = {
-          duracion: uploadResult.duration // Duración en segundos para audio/video
-        };
+      if (tipo === 'foto') {
+        try {
+          const imageBuffer = file.buffer || require('fs').readFileSync(file.path);
+          const imageInfo = await sharp(imageBuffer).metadata();
+          dimensiones = { 
+            ancho: imageInfo.width, 
+            alto: imageInfo.height 
+          };
+        } catch (sharpError) {
+          console.warn('⚠️ No se pudieron obtener dimensiones de imagen:', sharpError.message);
+          // Continuar sin dimensiones
+        }
       }
+
+      // Para videos/audio, R2 no proporciona duración automáticamente
+      // Se podría usar ffprobe aquí si es necesario
 
       // Crear registro en base de datos
       const mediaData = {
@@ -157,10 +143,10 @@ class MediaService {
         archivo: {
           nombreOriginal: file.originalname,
           nombreArchivo: uniqueFilename,
-          ruta: publicId, // Guardamos el public_id de Cloudinary
-          url: uploadResult.secure_url,
+          ruta: destinationPath, // Ruta completa en R2
+          url: uploadResult.url,  // URL pública de R2
           mimeType: file.mimetype,
-          tamaño: uploadResult.bytes || file.size
+          tamaño: uploadResult.size || file.size
         },
         dimensiones,
         metadata: {
@@ -168,21 +154,21 @@ class MediaService {
           ubicacion: metadata.ubicacion || {},
           camara: metadata.camara || '',
           configuracion: metadata.configuracion || {},
-          // Metadatos de Cloudinary
-          cloudinary: {
-            public_id: uploadResult.public_id,
-            version: uploadResult.version,
-            format: uploadResult.format,
-            width: uploadResult.width,
-            height: uploadResult.height,
-            duration: uploadResult.duration // Para videos
+          // Metadatos de R2
+          r2: {
+            bucket: uploadResult.bucket,
+            key: uploadResult.key,
+            etag: uploadResult.etag,
+            versionId: uploadResult.versionId
           }
         },
         orden: metadata.orden || 0,
         esPortada: Boolean(metadata.esPortada),
         procesado: {
           estado: 'completado',
-          versiones: {},
+          versiones: {
+            original: uploadResult.url // R2 no genera versiones automáticamente
+          },
           fechaProcesado: new Date()
         }
       };
@@ -192,7 +178,7 @@ class MediaService {
         tipo,
         seccion: metadata.seccion || 'galeria',
         titulo: metadata.titulo || '',
-        url: uploadResult.secure_url
+        url: uploadResult.url
       });
       
       const media = await mediaRepository.create(mediaData);
@@ -204,16 +190,15 @@ class MediaService {
         titulo: media.titulo
       });
 
-      // Generar versiones optimizadas si es foto (Cloudinary automático)
+      // Para imágenes, generar URLs de diferentes tamaños (sin procesamiento)
       if (tipo === 'foto') {
-        await this.generateImageVersions(media, uploadResult.public_id);
+        await this.generateImageVersions(media, uploadResult.url);
       }
       
       console.log('✅ Archivo subido exitosamente:', {
         tipo,
         seccion: metadata.seccion,
-        url: uploadResult.secure_url,
-        duracion: uploadResult.duration || 'N/A'
+        url: uploadResult.url
       });
 
       return {
@@ -227,7 +212,7 @@ class MediaService {
         orden: media.orden,
         esPortada: media.esPortada,
         fechaSubida: media.createdAt,
-        cloudinary: media.metadata.cloudinary
+        r2: media.metadata.r2
       };
     } catch (error) {
       console.error('❌ Error en processAndUploadFile:', error);
@@ -236,43 +221,33 @@ class MediaService {
   }
 
   /**
-   * Generar versiones optimizadas de imágenes - DESHABILITADO PARA CONSERVAR CRÉDITOS
+   * Generar versiones de imágenes - SIMPLIFICADO PARA R2
+   * R2 no procesa imágenes automáticamente, pero podemos generar URLs
    */
-  async generateImageVersions(media, publicId) {
+  async generateImageVersions(media, originalUrl) {
     try {
-      console.log(`☁️ Skipping automatic versions to conserve credits for: ${publicId}`);
+      console.log(`☁️ Generando URLs para diferentes tamaños: ${originalUrl}`);
 
-      // OPCIÓN 1: Solo generar URLs sin transformaciones (no consume créditos extra)
+      // R2 no procesa imágenes, así que todas las versiones apuntan a la original
+      // El frontend puede usar CSS para redimensionar o usar un servicio externo si es necesario
       const versionUrls = {
-        thumbnail: cloudinary.url(publicId),  // URL original, sin transformación
-        small: cloudinary.url(publicId),     // URL original, sin transformación
-        medium: cloudinary.url(publicId),    // URL original, sin transformación
-        large: cloudinary.url(publicId)      // URL original, sin transformación
+        thumbnail: originalUrl,  // Imagen original
+        small: originalUrl,     // Imagen original
+        medium: originalUrl,    // Imagen original
+        large: originalUrl,     // Imagen original
+        original: originalUrl   // Imagen original
       };
 
-      // OPCIÓN 2: Generar URLs con transformaciones pero SIN procesar (solo cuando se usen)
-      // Los usuarios pueden usar estas URLs si las necesitan, pero no se procesan ahora
-      const onDemandUrls = {
-        thumbnailOnDemand: cloudinary.url(publicId, { 
-          width: 150, height: 150, crop: 'thumb', quality: 'auto' 
-        }),
-        smallOnDemand: cloudinary.url(publicId, { 
-          width: 400, height: 400, crop: 'limit', quality: 'auto' 
-        }),
-        mediumOnDemand: cloudinary.url(publicId, { 
-          width: 800, height: 800, crop: 'limit', quality: 'auto' 
-        }),
-        largeOnDemand: cloudinary.url(publicId, { 
-          width: 1200, height: 1200, crop: 'limit', quality: 'auto' 
-        })
-      };
+      // Si necesitas transformaciones de imagen, puedes:
+      // 1. Usar un servicio externo como ImageKit, Cloudflare Images
+      // 2. Procesar localmente con Sharp antes del upload
+      // 3. Usar un proxy de transformación en el frontend
         
-      console.log(`✓ URLs generadas (sin procesamiento): original + on-demand options`);
+      console.log(`✓ URLs generadas para R2 (sin transformaciones)`);
 
-      // Actualizar media con URLs disponibles (pero no procesadas)
+      // Actualizar media con URLs
       await mediaRepository.update(media._id, {
         'procesado.versiones': versionUrls,
-        'procesado.onDemandVersions': onDemandUrls, // URLs disponibles para usar si se necesitan
         'procesado.estado': 'completado'
       });
 
@@ -467,7 +442,7 @@ class MediaService {
   }
 
   /**
-   * Eliminar media - CLOUDINARY DIRECTO
+   * Eliminar media - CLOUDFLARE R2
    */
   async deleteMedia(mediaId, adminId) {
     try {
@@ -481,35 +456,22 @@ class MediaService {
       console.log('🔍 Media encontrado:', { 
         id: media._id, 
         url: media.archivo?.url, 
-        publicId: media.archivo?.ruta,
+        ruta: media.archivo?.ruta,
         tipo: media.tipo
       });
 
-      // Eliminar de Cloudinary usando el public_id
-      const publicId = media.archivo.ruta; // Guardamos el public_id en ruta
+      // Eliminar de R2 usando la ruta completa
+      const filePath = media.archivo.ruta; // Ruta completa en R2
       
-      if (publicId) {
-        console.log(`☁️ Eliminando de Cloudinary: ${publicId}`);
+      if (filePath) {
+        console.log(`☁️ Eliminando de R2: ${filePath}`);
         
         try {
-          // Eliminar según el tipo correcto de recurso
-          let result;
-          console.log(`🔍 Tipo de media para eliminar: ${media.tipo}`);
-          
-          if (media.tipo === 'video' || media.tipo === 'archivo_mp3') {
-            // Videos y archivos MP3 usan resource_type: 'video' en Cloudinary
-            console.log(`☁️ Eliminando como video/audio: ${publicId}`);
-            result = await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
-          } else {
-            // Imágenes usan resource_type por defecto (image)
-            console.log(`☁️ Eliminando como imagen: ${publicId}`);
-            result = await cloudinary.uploader.destroy(publicId);
-          }
-          
-          console.log(`✓ Eliminado de Cloudinary: ${result.result}`);
-        } catch (cloudinaryError) {
-          console.warn(`⚠️ Error eliminando de Cloudinary: ${cloudinaryError.message}`);
-          // Continuar con soft delete aunque falle Cloudinary
+          const result = await r2StorageService.deleteFile(filePath);
+          console.log(`✓ Eliminado de R2:`, result);
+        } catch (r2Error) {
+          console.warn(`⚠️ Error eliminando de R2: ${r2Error.message}`);
+          // Continuar con soft delete aunque falle R2
         }
       }
 
@@ -597,7 +559,7 @@ class MediaService {
     }
 
     // Validar tipos permitidos
-    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png']; // Solo JPG y PNG para imágenes
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     const allowedVideoTypes = ['video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv'];
     const allowedAudioTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/x-m4a'];
     const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes, ...allowedAudioTypes];
@@ -619,12 +581,12 @@ class MediaService {
         throw new Error('La imagen excede el tamaño máximo permitido (10MB)');
       }
     } else if (file.mimetype.startsWith('video/')) {
-      const maxVideoSize = 50 * 1024 * 1024; // 50MB para videos (suficiente para 30 segundos en 1080p)
+      const maxVideoSize = 50 * 1024 * 1024; // 50MB para videos
       if (file.size > maxVideoSize) {
         throw new Error('El video excede el tamaño máximo permitido (50MB)');
       }
     } else if (file.mimetype.startsWith('audio/')) {
-      const maxAudioSize = 20 * 1024 * 1024; // 20MB para audio (suficiente para 5-7 minutos en calidad alta)
+      const maxAudioSize = 20 * 1024 * 1024; // 20MB para audio
       if (file.size > maxAudioSize) {
         throw new Error('El archivo de audio excede el tamaño máximo permitido (20MB)');
       }
@@ -662,19 +624,14 @@ class MediaService {
   }
 
   /**
-   * Obtener dimensiones de imagen desde Cloudinary
-   * (Ya no necesario, Cloudinary nos da las dimensiones directamente)
-   */
-
-  /**
    * Formatear media para admin
    */
   formatMediaForAdmin(media) {
     console.log('🔍 formatMediaForAdmin input:', media._id, media.titulo);
     
     const formatted = {
-      _id: media._id, // Asegurar que _id esté presente
-      id: media._id,  // También agregar id por compatibilidad
+      _id: media._id,
+      id: media._id,
       tipo: media.tipo,
       titulo: media.titulo,
       descripcion: media.descripcion,
@@ -687,8 +644,8 @@ class MediaService {
       estadisticas: media.estadisticas,
       fechaSubida: media.createdAt,
       fechaActualizacion: media.updatedAt,
-      createdAt: media.createdAt, // Agregar para compatibilidad frontend
-      url: media.archivo?.url // Agregar URL directa
+      createdAt: media.createdAt,
+      url: media.archivo?.url
     };
     
     console.log('🔍 formatMediaForAdmin output:', formatted._id, formatted.titulo);
@@ -738,7 +695,6 @@ class MediaService {
   async updateSlideshowConfig(profileId, userId, config) {
     try {
       // Por ahora, guardamos la configuración en el perfil
-      // En el futuro se puede crear una colección separada para configuraciones
       const Profile = require('../../../models/Profile');
       
       const profile = await Profile.findById(profileId);
@@ -746,7 +702,6 @@ class MediaService {
         throw new Error('Memorial no encontrado');
       }
 
-      // Actualizar configuración de slideshow (se puede expandir el modelo Profile)
       const updatedProfile = await Profile.findByIdAndUpdate(
         profileId,
         { 
