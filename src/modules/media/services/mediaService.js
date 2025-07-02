@@ -656,10 +656,17 @@ class MediaService {
    * Formatear media para público
    */
   formatMediaForPublic(media) {
+    // Para archivos MP3, usar nombreOriginal como fallback si no hay título
+    let titulo = media.titulo;
+    if (!titulo && media.tipo === 'archivo_mp3' && media.archivo?.nombreOriginal) {
+      // Extraer el nombre sin extensión como título
+      titulo = media.archivo.nombreOriginal.replace(/\.[^/.]+$/, "");
+    }
+    
     return {
       id: media._id || media.id,
       tipo: media.tipo,
-      titulo: media.titulo,
+      titulo: titulo || media.titulo,
       descripcion: media.descripcion,
       url: media.url,
       urlThumbnail: media.urlThumbnail,
@@ -668,7 +675,12 @@ class MediaService {
       orden: media.orden,
       esPortada: media.esPortada,
       fechaSubida: media.fechaSubida,
-      fechaOriginal: media.fechaOriginal
+      fechaOriginal: media.fechaOriginal,
+      archivo: {
+        nombreOriginal: media.archivo?.nombreOriginal,
+        mimeType: media.archivo?.mimeType,
+        tamaño: media.archivo?.tamaño
+      }
     };
   }
 
