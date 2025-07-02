@@ -155,18 +155,19 @@ clientSchema.statics.buscar = function(termino) {
   }).sort({ fechaRegistro: -1 });
 };
 
-// Método para obtener estadísticas básicas
+// 🔧 MÉTODO CORREGIDO: Obtener estadísticas solo de clientes activos
 clientSchema.statics.getEstadisticas = function() {
   return this.aggregate([
     {
+      // ✅ FILTRAR: Solo clientes activos
+      $match: { activo: true }
+    },
+    {
       $group: {
         _id: null,
+        // ✅ CORREGIDO: Solo cuenta clientes activos
         total: { $sum: 1 },
-        activos: {
-          $sum: {
-            $cond: [{ $eq: ['$activo', true] }, 1, 0]
-          }
-        },
+        activos: { $sum: 1 }, // Todos los que pasaron el filtro son activos
         registradosEsteMes: {
           $sum: {
             $cond: [
@@ -181,6 +182,58 @@ clientSchema.statics.getEstadisticas = function() {
             ]
           }
         }
+      }
+    }
+  ]);
+};
+
+// 🔧 MÉTODO ADICIONAL: Estadísticas detalladas (activos vs inactivos)
+clientSchema.statics.getEstadisticasDetalladas = function() {
+  return this.aggregate([
+    {
+      $facet: {
+        // Estadísticas de clientes activos
+        activos: [
+          { $match: { activo: true } },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: 1 },
+              registradosEsteMes: {
+                $sum: {
+                  $cond: [
+                    {
+                      $gte: [
+                        '$fechaRegistro',
+                        new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+                      ]
+                    },
+                    1,
+                    0
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        // Estadísticas de clientes inactivos (para referencia)
+        inactivos: [
+          { $match: { activo: false } },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: 1 }
+            }
+          }
+        ]
+      }
+    },
+    {
+      $project: {
+        total: { $ifNull: [{ $arrayElemAt: ['$activos.total', 0] }, 0] },
+        activos: { $ifNull: [{ $arrayElemAt: ['$activos.total', 0] }, 0] },
+        inactivos: { $ifNull: [{ $arrayElemAt: ['$inactivos.total', 0] }, 0] },
+        registradosEsteMes: { $ifNull: [{ $arrayElemAt: ['$activos.registradosEsteMes', 0] }, 0] }
       }
     }
   ]);

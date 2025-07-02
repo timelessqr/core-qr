@@ -50,6 +50,7 @@ class AdminService {
             nombre: `${client.nombre} ${client.apellido}`,
             codigo: client.codigoCliente,
             telefono: client.telefono,
+            email: client.email, // ✅ AGREGADO: Campo email faltante
             fechaRegistro: client.fechaRegistro
           })),
           memorialesRecientes: recentProfiles.profiles.map(profile => ({
